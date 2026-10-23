@@ -1,0 +1,129 @@
+// Carsai BMS Admin — Schema da base de dados
+// Plataforma administrativa do Carsai Business Management System
+// CarsaiDev — Uma linha, uma solução. 🇲🇿
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Utilizadores do painel administrativo (equipa Carsai)
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         String    @default("ADMIN") // SUPER_ADMIN | ADMIN | SUPPORT
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// Planos de subscrição da plataforma
+model Plan {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  price       Float    @default(0)
+  interval    String   @default("MONTHLY") // MONTHLY | YEARLY
+  maxUsers    Int      @default(5)
+  isPopular   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  modules     PlanModule[]
+  companies   Company[]
+}
+
+// Módulos do sistema BMS (activáveis por plano/empresa)
+model Module {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  description String?
+  icon        String   @default("Package") // nome do ícone lucide-react
+  category    String   @default("CORE")
+  isCore      Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  plans       PlanModule[]
+  companies   CompanyModule[]
+}
+
+// Módulos incluídos em cada plano
+model PlanModule {
+  planId   String
+  moduleId String
+  plan     Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@id([planId, moduleId])
+}
+
+// Estado de activação de módulos por empresa
+model CompanyModule {
+  companyId String
+  moduleId  String
+  isEnabled Boolean   @default(false)
+  enabledAt DateTime?
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  module    Module  @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, moduleId])
+}
+
+// Empresas cliente da plataforma
+model Company {
+  id            String    @id @default(cuid())
+  name          String
+  slug          String    @unique
+  email         String
+  phone         String?
+  nuit          String?
+  address       String?
+  city          String?
+  province      String?
+  status        String    @default("PENDING") // PENDING | ACTIVE | SUSPENDED | CANCELLED
+  planId        String?
+  plan          Plan?     @relation(fields: [planId], references: [id], onDelete: SetNull)
+  licenseKey    String?   @unique
+  licenseStatus String    @default("ACTIVE") // ACTIVE | REVOKED
+  apiKey        String?   @unique
+  apiKeyStatus  String    @default("ACTIVE") // ACTIVE | REVOKED
+  maxUsers      Int       @default(5)
+  expiresAt     DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  modules       CompanyModule[]
+}
+
+// Registo de auditoria de acções sensíveis
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String // LOGIN | LOGIN_FAILED | COMPANY_CREATED | COMPANY_UPDATED | COMPANY_DELETED | COMPANY_SUSPENDED | COMPANY_ACTIVATED | PLAN_CREATED | PLAN_UPDATED | PLAN_DELETED | MODULE_CREATED | MODULE_UPDATED | MODULE_ENABLED | MODULE_DISABLED | KEY_REGENERATED | KEY_REVOKED | USER_CREATED | USER_UPDATED | USER_DELETED | SETTING_UPDATED
+  entityType String // Company | Plan | Module | User | Setting | Auth | CompanyModule
+  entityId   String?
+  entityName String?
+  details    String?
+  actorEmail String?
+  createdAt  DateTime @default(now())
+}
+
+// Configurações do sistema (key-value)
+model Setting {
+  key         String @id
+  value       String
+  type        String @default("string") // string | number | boolean
+  group       String @default("general") // general | access | system
+  description String?
+}

@@ -1,0 +1,37 @@
+# dependências
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# base de dados local
+db/*.db
+db/*.db-journal
+
+# ambiente
+.env
+.env*.local
+
+# logs
+*.log
+dev.log
+server.log
+
+# sistema / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# específico do sandbox de desenvolvimento
+worklog.md
+agent-ctx/
+.zscripts/
+.claude/
