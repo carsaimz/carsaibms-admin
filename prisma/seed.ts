@@ -147,6 +147,8 @@ const AUDIT = [
   { action: 'MODULE_DISABLED', entityType: 'CompanyModule', entityName: 'Stock — Beira Logística, S.A.', details: 'Módulo desactivado a pedido do cliente', actorEmail: 'gestor@carsai.co.mz', daysAgo: 30 },
   { action: 'KEY_REGENERATED', entityType: 'Company', entityName: 'Pemba Turismo, Lda', details: 'Chave de API regenerada por suspeita de compromisso', actorEmail: 'suporte@carsai.co.mz', daysAgo: 7 },
   { action: 'COMPANY_SUSPENDED', entityType: 'Company', entityName: 'Chimoio Agro-Indústria', details: 'Suspensa por falta de pagamento', actorEmail: 'admin@carsai.co.mz', daysAgo: 5 },
+  { action: 'INVOICE_PAID', entityType: 'Invoice', entityName: 'Mercado Chissano & Filhos', details: 'Factura paga via M-Pesa', actorEmail: 'gestor@carsai.co.mz', daysAgo: 4 },
+  { action: 'WEBHOOK_CREATED', entityType: 'Webhook', entityName: 'Carsai Moçambique, Lda', details: 'Webhook criado → https://hooks.carsai.co.mz/bms/main', actorEmail: 'admin@carsai.co.mz', daysAgo: 12 },
   { action: 'SETTING_UPDATED', entityType: 'Setting', entityName: 'licenseEnforcement', details: 'valor → true', actorEmail: 'admin@carsai.co.mz', daysAgo: 3 },
   { action: 'LOGIN', entityType: 'Auth', entityName: 'admin@carsai.co.mz', details: 'Sessão iniciada', actorEmail: 'admin@carsai.co.mz', daysAgo: 1 },
 ]
@@ -160,6 +162,9 @@ async function main() {
 
   // Limpeza (ordem respeita dependências)
   await prisma.auditLog.deleteMany()
+  await prisma.invoice.deleteMany()
+  await prisma.instance.deleteMany()
+  await prisma.webhook.deleteMany()
   await prisma.companyModule.deleteMany()
   await prisma.planModule.deleteMany()
   await prisma.company.deleteMany()
@@ -220,7 +225,16 @@ async function main() {
   console.log(`  ✓ ${PLANS.length} planos de subscrição`)
 
   // Empresas + activação de módulos por plano
+  const createdCompanies: Array<{
+    id: string
+    name: string
+    status: string
+    planSlug: string
+    licenseKey: string
+    daysAgo: number
+  }> = []
   for (const c of COMPANIES) {
+    const licenseKey = genLicenseKey()
     const created = await prisma.company.create({
       data: {
         name: c.name,
@@ -233,7 +247,7 @@ async function main() {
         province: c.province,
         status: c.status,
         planId: planIdBySlug.get(c.planSlug)!,
-        licenseKey: genLicenseKey(),
+        licenseKey,
         licenseStatus: 'ACTIVE',
         apiKey: genApiKey(),
         apiKeyStatus: 'ACTIVE',
@@ -242,6 +256,14 @@ async function main() {
         createdAt: daysAgo(c.daysAgo),
         updatedAt: daysAgo(Math.max(0, c.daysAgo - 5)),
       },
+    })
+    createdCompanies.push({
+      id: created.id,
+      name: created.name,
+      status: c.status,
+      planSlug: c.planSlug,
+      licenseKey,
+      daysAgo: c.daysAgo,
     })
 
     const planDef = PLANS.find((p) => p.slug === c.planSlug)!
@@ -267,6 +289,167 @@ async function main() {
     }
   }
   console.log(`  ✓ ${COMPANIES.length} empresas de demonstração`)
+
+  /* ---------------- Telemetria: instâncias BMS ---------------- */
+  function hoursAgo(h: number): Date {
+    return new Date(Date.now() - h * 3600 * 1000)
+  }
+  const carsaiCo = createdCompanies[0]
+  const chissanoCo = createdCompanies[1]
+  const beiraCo = createdCompanies[2]
+  const quelimaneCo = createdCompanies[4]
+  const INSTANCE_SEED = [
+    { co: carsaiCo, instanceId: 'srv-maputo-01', appVersion: '1.1.0', nodeVersion: 'v20.18.0', dbEngine: 'postgres', usersCount: 38, lastSeenAt: hoursAgo(0.2), meta: '{"memoryMb":2048,"uptimeDays":96}' },
+    { co: carsaiCo, instanceId: 'srv-backup-01', appVersion: '1.1.0', nodeVersion: 'v20.18.0', dbEngine: 'postgres', usersCount: 38, lastSeenAt: hoursAgo(2), meta: '{"role":"replica"}' },
+    { co: chissanoCo, instanceId: 'loja-matola', appVersion: '1.0.4', nodeVersion: 'v20.11.0', dbEngine: 'sqlite', usersCount: 11, lastSeenAt: hoursAgo(5), meta: null },
+    { co: beiraCo, instanceId: 'armazem-beira', appVersion: '1.0.4', nodeVersion: 'v20.11.0', dbEngine: 'sqlite', usersCount: 9, lastSeenAt: hoursAgo(6), meta: null },
+    { co: quelimaneCo, instanceId: 'quelimane-main', appVersion: '1.0.2', nodeVersion: 'v18.20.1', dbEngine: 'sqlite', usersCount: 4, lastSeenAt: hoursAgo(24 * 3), meta: null },
+    { co: createdCompanies[6], instanceId: 'pemba-recepcao', appVersion: '1.0.2', nodeVersion: 'v18.20.1', dbEngine: 'sqlite', usersCount: 3, lastSeenAt: hoursAgo(24 * 41), meta: null },
+  ]
+  for (const inst of INSTANCE_SEED) {
+    await prisma.instance.create({
+      data: {
+        companyId: inst.co.id,
+        instanceId: inst.instanceId,
+        appVersion: inst.appVersion,
+        nodeVersion: inst.nodeVersion,
+        dbEngine: inst.dbEngine,
+        usersCount: inst.usersCount,
+        meta: inst.meta,
+        lastSeenAt: inst.lastSeenAt,
+        firstSeenAt: daysAgo(Math.max(1, inst.co.daysAgo - 2)),
+      },
+    })
+  }
+  console.log(`  ✓ ${INSTANCE_SEED.length} instâncias com telemetria`)
+
+  /* ---------------- Facturas de subscrição ---------------- */
+  function monthPeriod(offset: number): { start: Date; end: Date; due: Date; year: number; month: number } {
+    const now = new Date()
+    const start = new Date(now.getFullYear(), now.getMonth() - offset, 1)
+    const end = new Date(now.getFullYear(), now.getMonth() - offset + 1, 0, 23, 59, 59, 999)
+    const due = new Date(end.getTime() + 15 * 24 * 3600 * 1000)
+    return { start, end, due, year: start.getFullYear(), month: start.getMonth() + 1 }
+  }
+  const PAID_METHODS = ['MPESA', 'TRANSFER', 'CASH', 'CARD'] as const
+  let invoiceSeq = 1
+  function nextNumber(year: number): string {
+    const n = `FT-${year}-${String(invoiceSeq).padStart(5, '0')}`
+    invoiceSeq += 1
+    return n
+  }
+  const BILLING_COMPANIES = [carsaiCo, chissanoCo, beiraCo, quelimaneCo, createdCompanies[6]]
+  let paidCount = 0
+  // 4 meses fechados (pagos) + mês corrente (aberto)
+  for (let offset = 4; offset >= 1; offset--) {
+    const p = monthPeriod(offset)
+    for (const co of BILLING_COMPANIES) {
+      const plan = PLANS.find((pl) => pl.slug === co.planSlug)
+      if (!plan || plan.price <= 0) continue
+      const method = PAID_METHODS[paidCount % PAID_METHODS.length]
+      paidCount += 1
+      await prisma.invoice.create({
+        data: {
+          number: nextNumber(p.year),
+          companyId: co.id,
+          planId: planIdBySlug.get(co.planSlug)!,
+          planName: plan.name,
+          amount: plan.price,
+          periodStart: p.start,
+          periodEnd: p.end,
+          issuedAt: p.start,
+          dueAt: p.due,
+          paidAt: new Date(p.start.getTime() + 8 * 24 * 3600 * 1000),
+          method,
+          status: 'PAID',
+        },
+      })
+    }
+  }
+  // Mês corrente: activas com plano → OPEN; suspensas → OVERDUE
+  const current = monthPeriod(0)
+  for (const co of createdCompanies) {
+    const plan = PLANS.find((pl) => pl.slug === co.planSlug)
+    if (!plan || plan.price <= 0) continue
+    if (co.status === 'ACTIVE') {
+      await prisma.invoice.create({
+        data: {
+          number: nextNumber(current.year),
+          companyId: co.id,
+          planId: planIdBySlug.get(co.planSlug)!,
+          planName: plan.name,
+          amount: plan.price,
+          periodStart: current.start,
+          periodEnd: current.end,
+          issuedAt: current.start,
+          dueAt: current.due,
+          status: 'OPEN',
+        },
+      })
+    } else if (co.status === 'SUSPENDED') {
+      // 2 meses em atraso
+      for (const offset of [1, 0]) {
+        const p = monthPeriod(offset)
+        await prisma.invoice.create({
+          data: {
+            number: nextNumber(p.year),
+            companyId: co.id,
+            planId: planIdBySlug.get(co.planSlug)!,
+            planName: plan.name,
+            amount: plan.price,
+            periodStart: p.start,
+            periodEnd: p.end,
+            issuedAt: p.start,
+            dueAt: offset === 0 ? new Date(Date.now() - 5 * 24 * 3600 * 1000) : p.due,
+            status: 'OVERDUE',
+          },
+        })
+      }
+    }
+  }
+  // Uma cancelada (cliente desistiu)
+  const pCancel = monthPeriod(3)
+  await prisma.invoice.create({
+    data: {
+      number: nextNumber(pCancel.year),
+      companyId: createdCompanies[7].id,
+      planId: planIdBySlug.get('teste')!,
+      planName: 'Teste Gratuito',
+      amount: 0,
+      periodStart: pCancel.start,
+      periodEnd: pCancel.end,
+      issuedAt: pCancel.start,
+      dueAt: pCancel.due,
+      status: 'CANCELLED',
+      notes: 'Cliente cancelou o período de teste.',
+    },
+  })
+  const totalInvoices = await prisma.invoice.count()
+  console.log(`  ✓ ${totalInvoices} facturas de subscrição`)
+
+  /* ---------------- Webhooks ---------------- */
+  await prisma.webhook.create({
+    data: {
+      companyId: carsaiCo.id,
+      url: 'https://hooks.carsai.co.mz/bms/main',
+      events: '*',
+      secret: `whsec_${code(48, HEX)}`,
+      isActive: true,
+      lastStatus: 200,
+      lastFiredAt: hoursAgo(3),
+    },
+  })
+  await prisma.webhook.create({
+    data: {
+      companyId: chissanoCo.id,
+      url: 'https://erp.chissanofilhos.co.mz/webhooks/carsai',
+      events: 'INVOICE_PAID,INVOICE_OVERDUE',
+      secret: `whsec_${code(48, HEX)}`,
+      isActive: true,
+      lastStatus: null,
+    },
+  })
+  console.log('  ✓ 2 webhooks registados')
 
   // Configurações
   for (const s of SETTINGS) {

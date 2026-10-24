@@ -10,7 +10,10 @@ import {
   Blocks,
   Building2,
   CircleAlert,
+  CircleCheck,
+  FileText,
   History,
+  Radar,
   RefreshCw,
   UserCog,
   Wallet,
@@ -88,6 +91,11 @@ function DashboardSkeleton() {
           </Card>
         ))}
       </div>
+      <Card>
+        <CardContent>
+          <Skeleton className="h-60 w-full" />
+        </CardContent>
+      </Card>
       <div className="grid gap-4 lg:grid-cols-2">
         {[0, 1].map((i) => (
           <Card key={i}>
@@ -156,6 +164,12 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
 
   const growthData = stats.growth.map((g) => ({ label: monthLabel(g.month), count: g.count }))
 
+  const billingData = stats.billing.series.map((s) => ({
+    label: monthLabel(s.month),
+    Emitido: s.issued,
+    Cobrado: s.paid,
+  }))
+
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" description="Visão geral da plataforma em tempo real" />
@@ -189,6 +203,38 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
           hint="Contas com acesso activo"
           icon={UserCog}
           tone="zinc"
+        />
+      </div>
+
+      {/* Estatísticas — telemetria e facturação */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Instâncias activas"
+          value={stats.instances.active24h}
+          hint={`${stats.instances.total} instaladas`}
+          icon={Radar}
+          tone="emerald"
+        />
+        <StatCard
+          title="Em aberto"
+          value={stats.billing.open.count}
+          hint={formatMZN(stats.billing.open.amount)}
+          icon={FileText}
+          tone="amber"
+        />
+        <StatCard
+          title="Em atraso"
+          value={stats.billing.overdue.count}
+          hint={formatMZN(stats.billing.overdue.amount)}
+          icon={CircleAlert}
+          tone="rose"
+        />
+        <StatCard
+          title="Cobrado este mês"
+          value={formatMZN(stats.billing.paidMonth.amount)}
+          hint={`${stats.billing.paidMonth.count} facturas pagas`}
+          icon={CircleCheck}
+          tone="emerald"
         />
       </div>
 
@@ -289,6 +335,31 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
           </CardContent>
         </Card>
       </div>
+
+      {/* Facturação — últimos 6 meses */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Facturação — últimos 6 meses</CardTitle>
+          <CardDescription>Emitido vs. cobrado por mês</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {billingData.length === 0 ? (
+            <EmptyState icon={FileText} title="Sem dados" description="Ainda não existem facturas emitidas." />
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={billingData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#a1a1aa40" />
+                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#71717a' }} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#71717a' }} width={64} />
+                <RechartsTooltip cursor={{ fill: 'rgba(16,185,129,0.07)' }} contentStyle={tooltipStyle} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="Emitido" fill={AMBER} radius={[6, 6, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="Cobrado" fill={EMERALD_DARK} radius={[6, 6, 0, 0]} maxBarSize={28} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Listas */}
       <div className="grid gap-4 lg:grid-cols-2">

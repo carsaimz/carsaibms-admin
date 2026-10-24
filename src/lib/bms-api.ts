@@ -119,6 +119,9 @@ export interface CompanyDetail {
   company: Company & { plan: Plan | null }
   modules: CompanyModuleState[]
   audit: AuditEntry[]
+  webhooks: WebhookInfo[]
+  instances: InstanceInfo[]
+  invoices: Invoice[]
 }
 
 export interface AuditEntry {
@@ -140,6 +143,13 @@ export interface DashboardStats {
   companiesByPlan: Array<{ planName: string; count: number }>
   growth: Array<{ month: string; count: number }>
   moduleUsage: Array<{ name: string; count: number }>
+  billing: {
+    open: { count: number; amount: number }
+    overdue: { count: number; amount: number }
+    paidMonth: { count: number; amount: number }
+    series: Array<{ month: string; issued: number; paid: number }>
+  }
+  instances: { total: number; active24h: number }
   recentCompanies: Array<Company & { plan: { name: string } | null }>
   recentAudit: AuditEntry[]
 }
@@ -432,4 +442,190 @@ export function updateSettings(
     method: 'PATCH',
     body: JSON.stringify(patch),
   })
+}
+
+/* ------------------------------------------------------------------ */
+/* Facturação                                                          */
+/* ------------------------------------------------------------------ */
+
+export type InvoiceStatus = 'OPEN' | 'PAID' | 'OVERDUE' | 'CANCELLED'
+export type PaymentMethod = 'MPESA' | 'EMOLA' | 'TRANSFER' | 'CASH' | 'CARD'
+
+export interface Invoice {
+  id: string
+  number: string
+  companyId: string
+  planId: string | null
+  planName: string
+  amount: number
+  currency: string
+  periodStart: string
+  periodEnd: string
+  issuedAt: string
+  dueAt: string
+  paidAt: string | null
+  method: PaymentMethod | null
+  status: InvoiceStatus
+  notes: string | null
+  createdAt: string
+  company?: { id: string; name: string; status: string }
+}
+
+export interface InvoicesResponse {
+  items: Invoice[]
+  summary: Record<InvoiceStatus, number>
+  amounts: Record<InvoiceStatus, number>
+}
+
+export function listInvoices(filters: { status?: string; companyId?: string; search?: string } = {}): Promise<InvoicesResponse> {
+  const params = new URLSearchParams()
+  if (filters.status && filters.status !== 'ALL') params.set('status', filters.status)
+  if (filters.companyId && filters.companyId !== 'ALL') params.set('companyId', filters.companyId)
+  if (filters.search) params.set('search', filters.search)
+  const qs = params.toString()
+  return api<InvoicesResponse>(`/api/invoices${qs ? `?${qs}` : ''}`)
+}
+
+export interface GenerateInvoicesResult {
+  month: string
+  created: number
+  skipped: number
+  invoices: Array<{ id: string; number: string; company: string; amount: number }>
+}
+
+export function generateInvoices(month: string): Promise<GenerateInvoicesResult> {
+  return api<GenerateInvoicesResult>('/api/invoices/generate', {
+    method: 'POST',
+    body: JSON.stringify({ month }),
+  })
+}
+
+export function updateInvoice(
+  id: string,
+  payload: { status?: InvoiceStatus; method?: PaymentMethod | null; notes?: string | null; dueAt?: string }
+): Promise<{ invoice: Invoice }> {
+  return api<{ invoice: Invoice }>(`/api/invoices/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteInvoice(id: string): Promise<void> {
+  return api<void>(`/api/invoices/${id}`, { method: 'DELETE' })
+}
+
+export function createInvoice(payload: {
+  companyId: string
+  amount: number
+  periodStart: string
+  periodEnd: string
+  dueAt: string
+  planName?: string
+  notes?: string
+}): Promise<{ invoice: Invoice }> {
+  return api<{ invoice: Invoice }>('/api/invoices', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+/* ------------------------------------------------------------------ */
+/* Telemetria / Instâncias                                             */
+/* ------------------------------------------------------------------ */
+
+export interface InstanceInfo {
+  id: string
+  companyId: string
+  instanceId: string
+  appVersion: string | null
+  nodeVersion: string | null
+  dbEngine: string | null
+  usersCount: number | null
+  lastSeenAt: string
+  firstSeenAt: string
+  meta: string | null
+  company?: { id: string; name: string; status: string }
+}
+
+export function listInstances(filters: { companyId?: string; search?: string; active?: string } = {}): Promise<{
+  items: InstanceInfo[]
+  total: number
+  active24h: number
+}> {
+  const params = new URLSearchParams()
+  if (filters.companyId && filters.companyId !== 'ALL') params.set('companyId', filters.companyId)
+  if (filters.search) params.set('search', filters.search)
+  if (filters.active) params.set('active', filters.active)
+  const qs = params.toString()
+  return api<{ items: InstanceInfo[]; total: number; active24h: number }>(
+    `/api/instances${qs ? `?${qs}` : ''}`
+  )
+}
+
+/** Heartbeat público usado pelo BMS — também útil para testes manuais do painel. */
+export function sendTelemetry(payload: {
+  licenseKey: string
+  instanceId: string
+  appVersion?: string
+  nodeVersion?: string
+  dbEngine?: string
+  usersCount?: number
+}): Promise<{ ok: boolean; company: { name: string; plan: string | null }; serverTime: string }> {
+  return api<{ ok: boolean; company: { name: string; plan: string | null }; serverTime: string }>(
+    '/api/telemetry',
+    { method: 'POST', body: JSON.stringify(payload) }
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Webhooks                                                            */
+/* ------------------------------------------------------------------ */
+
+export const WEBHOOK_EVENT_LIST = [
+  'COMPANY_CREATED',
+  'COMPANY_ACTIVATED',
+  'COMPANY_SUSPENDED',
+  'LICENSE_ACTIVATED',
+  'LICENSE_REVOKED',
+  'INVOICE_GENERATED',
+  'INVOICE_PAID',
+  'INVOICE_OVERDUE',
+  'TEST',
+] as const
+
+export interface WebhookInfo {
+  id: string
+  companyId: string
+  url: string
+  events: string
+  secret: string
+  isActive: boolean
+  lastStatus: number | null
+  lastFiredAt: string | null
+  createdAt: string
+  company?: { id: string; name: string }
+}
+
+export function listWebhooks(companyId?: string): Promise<{ items: WebhookInfo[] }> {
+  const qs = companyId ? `?companyId=${encodeURIComponent(companyId)}` : ''
+  return api<{ items: WebhookInfo[] }>(`/api/webhooks${qs}`)
+}
+
+export function createWebhook(payload: { companyId: string; url: string; events?: string }): Promise<{ webhook: WebhookInfo }> {
+  return api<{ webhook: WebhookInfo }>('/api/webhooks', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function updateWebhook(
+  id: string,
+  payload: { url?: string; events?: string; isActive?: boolean }
+): Promise<{ webhook: WebhookInfo }> {
+  return api<{ webhook: WebhookInfo }>(`/api/webhooks/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteWebhook(id: string): Promise<void> {
+  return api<void>(`/api/webhooks/${id}`, { method: 'DELETE' })
+}
+
+export function testWebhook(id: string): Promise<{ status: number | null; ok: boolean }> {
+  return api<{ status: number | null; ok: boolean }>(`/api/webhooks/${id}/test`, { method: 'POST' })
 }

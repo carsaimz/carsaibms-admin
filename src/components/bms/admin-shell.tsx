@@ -15,6 +15,8 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Radar,
+  ReceiptText,
   ScrollText,
   Settings,
   UserCog,
@@ -39,8 +41,10 @@ import { DashboardView } from './dashboard-view'
 import { CompaniesView } from './companies-view'
 import { PlansView } from './plans-view'
 import { ModulesView } from './modules-view'
+import { BillingView } from './billing-view'
 import { UsersView } from './users-view'
 import { AuditView } from './audit-view'
+import { InstancesView } from './instances-view'
 import { SettingsView } from './settings-view'
 import { Logo, ThemeToggle, roleLabel, type SectionId } from './shared'
 
@@ -58,6 +62,7 @@ const NAV_GROUPS: Array<{
       { id: 'companies', label: 'Empresas', icon: Building2 },
       { id: 'plans', label: 'Planos', icon: CreditCard },
       { id: 'modules', label: 'Módulos', icon: Blocks },
+      { id: 'billing', label: 'Facturação', icon: ReceiptText },
     ],
   },
   {
@@ -65,6 +70,7 @@ const NAV_GROUPS: Array<{
     items: [
       { id: 'users', label: 'Utilizadores', icon: UserCog },
       { id: 'audit', label: 'Auditoria', icon: ScrollText },
+      { id: 'instances', label: 'Instâncias', icon: Radar },
       { id: 'settings', label: 'Configurações', icon: Settings },
     ],
   },
@@ -75,8 +81,10 @@ const SECTION_META: Record<SectionId, { title: string; subtitle: string }> = {
   companies: { title: 'Empresas', subtitle: 'Gestão de empresas clientes e chaves de licença' },
   plans: { title: 'Planos', subtitle: 'Planos de subscrição e módulos incluídos' },
   modules: { title: 'Módulos', subtitle: 'Módulos do sistema BMS' },
+  billing: { title: 'Facturação', subtitle: 'Facturas de subscrição das empresas cliente' },
   users: { title: 'Utilizadores', subtitle: 'Equipa com acesso ao painel administrativo' },
   audit: { title: 'Auditoria', subtitle: 'Registo de acções efectuadas no sistema' },
+  instances: { title: 'Instâncias', subtitle: 'Telemetria das instalações Carsai BMS em tempo real' },
   settings: { title: 'Configurações', subtitle: 'Parâmetros gerais da plataforma' },
 }
 
@@ -256,8 +264,10 @@ export function AdminShell({ user, onLogout }: { user: User; onLogout: () => voi
             {section === 'companies' && <CompaniesView user={user} />}
             {section === 'plans' && <PlansView />}
             {section === 'modules' && <ModulesView />}
+            {section === 'billing' && <BillingView />}
             {section === 'users' && <UsersView currentUser={user} />}
             {section === 'audit' && <AuditView />}
+            {section === 'instances' && <InstancesView />}
             {section === 'settings' && <SettingsView />}
           </motion.div>
         </main>

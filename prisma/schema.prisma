@@ -40,6 +40,7 @@ model Plan {
   updatedAt   DateTime @updatedAt
   modules     PlanModule[]
   companies   Company[]
+  invoices    Invoice[]
 }
 
 // Módulos do sistema BMS (activáveis por plano/empresa)
@@ -105,6 +106,68 @@ model Company {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   modules       CompanyModule[]
+  instances     Instance[]
+  invoices      Invoice[]
+  webhooks      Webhook[]
+}
+
+// Instâncias do Carsai BMS instaladas pelos clientes (telemetria/heartbeat)
+model Instance {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  instanceId  String   // identificador único da instalação (hostname/machine-id)
+  appVersion  String?
+  nodeVersion String?
+  dbEngine    String?  // sqlite | postgres | mysql
+  usersCount  Int?
+  lastSeenAt  DateTime
+  firstSeenAt DateTime @default(now())
+  meta        String?  // JSON com dados extra reportados pelo BMS
+
+  @@unique([companyId, instanceId])
+  @@index([lastSeenAt])
+}
+
+// Facturas de subscrição da plataforma
+model Invoice {
+  id          String    @id @default(cuid())
+  number      String    @unique // FT-2026-00001
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planId      String?
+  plan        Plan?     @relation(fields: [planId], references: [id], onDelete: SetNull)
+  planName    String
+  amount      Float
+  currency    String    @default("MZN")
+  periodStart DateTime
+  periodEnd   DateTime
+  issuedAt    DateTime  @default(now())
+  dueAt       DateTime
+  paidAt      DateTime?
+  method      String?   // MPESA | TRANSFER | CASH | CARD
+  status      String    @default("OPEN") // OPEN | PAID | OVERDUE | CANCELLED
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+  @@index([companyId])
+}
+
+// Webhooks por empresa (eventos da plataforma)
+model Webhook {
+  id          String    @id @default(cuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  url         String
+  events      String    @default("*") // CSV de eventos ou "*" para todos
+  secret      String    // segredo HMAC-SHA256 usado na assinatura X-Carsai-Signature
+  isActive    Boolean   @default(true)
+  lastStatus  Int?      // último código HTTP devolvido pelo destino (null = erro de rede)
+  lastFiredAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 // Registo de auditoria de acções sensíveis

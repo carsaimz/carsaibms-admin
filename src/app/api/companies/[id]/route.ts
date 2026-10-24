@@ -9,6 +9,7 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { getSessionUser } from '@/lib/auth'
 import { logAudit } from '@/lib/audit'
+import { dispatchWebhook } from '@/lib/webhooks'
 
 export const dynamic = 'force-dynamic'
 
@@ -77,12 +78,15 @@ export async function GET(_req: NextRequest, { params }: RouteCtx) {
       return NextResponse.json({ error: 'Empresa não encontrada' }, { status: 404 })
     }
 
-    const [modules, audit] = await Promise.all([
+    const [modules, audit, webhooks, instances, invoices] = await Promise.all([
       buildModulesPayload(id),
       companyAudit(id),
+      db.webhook.findMany({ where: { companyId: id }, orderBy: { createdAt: 'desc' } }),
+      db.instance.findMany({ where: { companyId: id }, orderBy: { lastSeenAt: 'desc' } }),
+      db.invoice.findMany({ where: { companyId: id }, orderBy: { issuedAt: 'desc' }, take: 12 }),
     ])
 
-    return NextResponse.json({ company, modules, audit })
+    return NextResponse.json({ company, modules, audit, webhooks, instances, invoices })
   } catch (err) {
     console.error('[GET /api/companies/:id]', err)
     return NextResponse.json({ error: 'Erro interno do servidor' }, { status: 500 })
@@ -229,6 +233,22 @@ export async function PATCH(req: NextRequest, { params }: RouteCtx) {
       }
       return company
     })
+
+    // Webhooks de mudança de estado / licença
+    if (statusChanged && (data.status === 'ACTIVE' || data.status === 'SUSPENDED')) {
+      void dispatchWebhook(
+        id,
+        data.status === 'ACTIVE' ? 'COMPANY_ACTIVATED' : 'COMPANY_SUSPENDED',
+        { companyId: id, company: updated.name, status: data.status }
+      )
+    }
+    if (data.licenseStatus !== undefined && data.licenseStatus !== existing.licenseStatus) {
+      void dispatchWebhook(
+        id,
+        data.licenseStatus === 'ACTIVE' ? 'LICENSE_ACTIVATED' : 'LICENSE_REVOKED',
+        { companyId: id, company: updated.name, licenseStatus: data.licenseStatus }
+      )
+    }
 
     // Auditoria
     if (statusChanged && data.status === 'SUSPENDED') {

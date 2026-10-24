@@ -72,8 +72,10 @@ export type SectionId =
   | 'companies'
   | 'plans'
   | 'modules'
+  | 'billing'
   | 'users'
   | 'audit'
+  | 'instances'
   | 'settings'
 
 export function roleLabel(role: string): string {

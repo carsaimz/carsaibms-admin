@@ -98,6 +98,53 @@ export async function GET() {
       count: g._count.moduleId,
     }))
 
+    // Facturação: resumo por estado + cobrado no mês + série de 6 meses
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const [invGroups, paidMonth, seriesRows] = await Promise.all([
+      db.invoice.groupBy({ by: ['status'], _count: { _all: true }, _sum: { amount: true } }),
+      db.invoice.aggregate({
+        where: { status: 'PAID', paidAt: { gte: startOfMonth } },
+        _count: { _all: true },
+        _sum: { amount: true },
+      }),
+      db.invoice.findMany({
+        where: { periodStart: { gte: windowStart } },
+        select: { periodStart: true, status: true, amount: true },
+      }),
+    ])
+    const invByStatus = new Map(invGroups.map((g) => [g.status, g]))
+    const invAmount = (s: string) => Math.round((invByStatus.get(s)?._sum.amount ?? 0) * 100) / 100
+    const invCount = (s: string) => invByStatus.get(s)?._count._all ?? 0
+    const billingSeriesMap = new Map(months.map((m) => [m, { issued: 0, paid: 0 }]))
+    for (const row of seriesRows) {
+      if (row.status === 'CANCELLED') continue
+      const key = monthKey(row.periodStart)
+      const bucket = billingSeriesMap.get(key)
+      if (!bucket) continue
+      bucket.issued += row.amount
+      if (row.status === 'PAID') bucket.paid += row.amount
+    }
+    const billing = {
+      open: { count: invCount('OPEN'), amount: invAmount('OPEN') },
+      overdue: { count: invCount('OVERDUE'), amount: invAmount('OVERDUE') },
+      paidMonth: {
+        count: paidMonth._count._all,
+        amount: Math.round((paidMonth._sum.amount ?? 0) * 100) / 100,
+      },
+      series: months.map((month) => ({
+        month,
+        issued: Math.round((billingSeriesMap.get(month)?.issued ?? 0) * 100) / 100,
+        paid: Math.round((billingSeriesMap.get(month)?.paid ?? 0) * 100) / 100,
+      })),
+    }
+
+    // Telemetria: instâncias BMS
+    const [instancesTotal, instancesActive24h] = await Promise.all([
+      db.instance.count(),
+      db.instance.count({ where: { lastSeenAt: { gte: new Date(now.getTime() - 24 * 3600 * 1000) } } }),
+    ])
+    const instances = { total: instancesTotal, active24h: instancesActive24h }
+
     // Listas recentes
     const [recentCompanies, recentAudit] = await Promise.all([
       db.company.findMany({
@@ -116,6 +163,8 @@ export async function GET() {
       companiesByPlan,
       growth,
       moduleUsage,
+      billing,
+      instances,
       recentCompanies,
       recentAudit,
     })
