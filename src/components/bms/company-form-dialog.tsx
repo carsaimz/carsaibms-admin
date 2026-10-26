@@ -30,7 +30,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { createCompany, updateCompany } from '@/lib/bms-api'
 import type { Company, CompanyStatus, Plan } from '@/lib/bms-api'
 import { toDateInput } from '@/lib/format'
-import { COMPANY_STATUSES, COMPANY_STATUS_LABELS } from './shared'
+import { useI18n } from '@/lib/i18n'
+import { COMPANY_STATUSES, useLabels } from './shared'
 
 interface FormState {
   name: string
@@ -76,6 +77,8 @@ export function CompanyFormDialog({
   onSaved: () => void
 }) {
   const isEdit = Boolean(company)
+  const { t } = useI18n()
+  const L = useLabels()
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -111,7 +114,7 @@ export function CompanyFormDialog({
     e.preventDefault()
     setError(null)
     if (!form.name.trim() || !form.email.trim()) {
-      setError('O nome e o email são obrigatórios.')
+      setError(t('companyForm.requiredFieldsError'))
       return
     }
     setSaving(true)
@@ -138,7 +141,7 @@ export function CompanyFormDialog({
       onSaved()
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível guardar a empresa.')
+      setError(err instanceof Error ? err.message : t('companyForm.saveError'))
     } finally {
       setSaving(false)
     }
@@ -148,11 +151,11 @@ export function CompanyFormDialog({
     <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
       <DialogContent className="max-h-[85vh] overflow-y-auto scrollbar-thin sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Editar empresa' : 'Nova empresa'}</DialogTitle>
+          <DialogTitle>{isEdit ? t('companyForm.editTitle') : t('companyForm.createTitle')}</DialogTitle>
           <DialogDescription>
             {isEdit
-              ? `Actualize os dados de "${company?.name}".`
-              : 'Registe uma nova empresa cliente. As chaves de licença e API são geradas automaticamente.'}
+              ? t('companyForm.editDescription', { name: company?.name ?? '' })
+              : t('companyForm.createDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -167,20 +170,20 @@ export function CompanyFormDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="company-name">
-                Nome <span className="text-rose-600 dark:text-rose-400">*</span>
+                {t('companyForm.name')} <span className="text-rose-600 dark:text-rose-400">*</span>
               </Label>
               <Input
                 id="company-name"
                 value={form.name}
                 onChange={(e) => set('name', e.target.value)}
-                placeholder="Ex: Mercado Chissano & Filhos"
+                placeholder={t('companyForm.namePlaceholder')}
                 disabled={saving}
                 required
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="company-email">
-                Email <span className="text-rose-600 dark:text-rose-400">*</span>
+                {t('companyForm.email')} <span className="text-rose-600 dark:text-rose-400">*</span>
               </Label>
               <Input
                 id="company-email"
@@ -193,7 +196,7 @@ export function CompanyFormDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="company-phone">Telefone</Label>
+              <Label htmlFor="company-phone">{t('companyForm.phone')}</Label>
               <Input
                 id="company-phone"
                 value={form.phone}
@@ -203,7 +206,7 @@ export function CompanyFormDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="company-nuit">NUIT</Label>
+              <Label htmlFor="company-nuit">{t('companyForm.nuit')}</Label>
               <Input
                 id="company-nuit"
                 value={form.nuit}
@@ -213,7 +216,7 @@ export function CompanyFormDialog({
               />
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="company-address">Endereço</Label>
+              <Label htmlFor="company-address">{t('companyForm.address')}</Label>
               <Input
                 id="company-address"
                 value={form.address}
@@ -223,7 +226,7 @@ export function CompanyFormDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="company-city">Cidade</Label>
+              <Label htmlFor="company-city">{t('companyForm.city')}</Label>
               <Input
                 id="company-city"
                 value={form.city}
@@ -233,7 +236,7 @@ export function CompanyFormDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="company-province">Província</Label>
+              <Label htmlFor="company-province">{t('companyForm.province')}</Label>
               <Input
                 id="company-province"
                 value={form.province}
@@ -243,13 +246,13 @@ export function CompanyFormDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="company-plan">Plano</Label>
+              <Label htmlFor="company-plan">{t('companyForm.plan')}</Label>
               <Select value={form.planId || 'NONE'} onValueChange={(v) => set('planId', v === 'NONE' ? '' : v)} disabled={saving}>
                 <SelectTrigger id="company-plan" className="w-full">
-                  <SelectValue placeholder="Seleccionar plano" />
+                  <SelectValue placeholder={t('companyForm.selectPlan')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="NONE">Sem plano</SelectItem>
+                  <SelectItem value="NONE">{t('companyForm.noPlan')}</SelectItem>
                   {plans.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
@@ -259,7 +262,7 @@ export function CompanyFormDialog({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="company-maxusers">Máx. utilizadores</Label>
+              <Label htmlFor="company-maxusers">{t('companyForm.maxUsers')}</Label>
               <Input
                 id="company-maxusers"
                 type="number"
@@ -270,7 +273,7 @@ export function CompanyFormDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="company-expires">Licença expira em</Label>
+              <Label htmlFor="company-expires">{t('companyForm.expiresAt')}</Label>
               <Input
                 id="company-expires"
                 type="date"
@@ -281,7 +284,7 @@ export function CompanyFormDialog({
             </div>
             {isEdit ? (
               <div className="space-y-2">
-                <Label htmlFor="company-status">Estado</Label>
+                <Label htmlFor="company-status">{t('companyForm.status')}</Label>
                 <Select value={form.status} onValueChange={(v) => set('status', v as CompanyStatus)} disabled={saving}>
                   <SelectTrigger id="company-status" className="w-full">
                     <SelectValue />
@@ -289,7 +292,7 @@ export function CompanyFormDialog({
                   <SelectContent>
                     {COMPANY_STATUSES.map((s) => (
                       <SelectItem key={s} value={s}>
-                        {COMPANY_STATUS_LABELS[s]}
+                        {L.status(s)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -297,12 +300,12 @@ export function CompanyFormDialog({
               </div>
             ) : null}
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="company-notes">Notas internas</Label>
+              <Label htmlFor="company-notes">{t('companyForm.notes')}</Label>
               <Textarea
                 id="company-notes"
                 value={form.notes}
                 onChange={(e) => set('notes', e.target.value)}
-                placeholder="Observações sobre o cliente, pagamentos, pedidos…"
+                placeholder={t('companyForm.notesPlaceholder')}
                 rows={3}
                 disabled={saving}
               />
@@ -311,11 +314,11 @@ export function CompanyFormDialog({
 
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={saving}>
               {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              {isEdit ? 'Guardar alterações' : 'Criar empresa'}
+              {isEdit ? t('companyForm.saveChanges') : t('companyForm.create')}
             </Button>
           </DialogFooter>
         </form>

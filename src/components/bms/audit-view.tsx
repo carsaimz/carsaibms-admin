@@ -22,15 +22,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { listAudit } from '@/lib/bms-api'
 import type { AuditEntry } from '@/lib/bms-api'
 import { formatDateTime, formatRelative } from '@/lib/format'
+import { useI18n } from '@/lib/i18n'
 import {
   AUDIT_ACTIONS,
   AUDIT_ENTITY_TYPES,
   AuditBadge,
-  auditActionLabel,
   EmptyState,
-  entityLabel,
   PageHeader,
   TableSkeleton,
+  useLabels,
 } from './shared'
 
 const AUDIT_LIMIT = 50
@@ -44,10 +44,12 @@ export function AuditView() {
   const [items, setItems] = useState<AuditEntry[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { t } = useI18n()
+  const L = useLabels()
 
   useEffect(() => {
-    const t = window.setTimeout(() => setSearch(searchInput.trim()), 350)
-    return () => window.clearTimeout(t)
+    const timer = window.setTimeout(() => setSearch(searchInput.trim()), 350)
+    return () => window.clearTimeout(timer)
   }, [searchInput])
 
   const load = useCallback(async () => {
@@ -57,11 +59,11 @@ export function AuditView() {
       const res = await listAudit({ action, entityType, search, limit: AUDIT_LIMIT })
       setItems(res.items)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao carregar a auditoria.')
+      setError(e instanceof Error ? e.message : t('audit.errors.load'))
     } finally {
       setLoading(false)
     }
-  }, [action, entityType, search])
+  }, [action, entityType, search, t])
 
   useEffect(() => {
     void load()
@@ -69,13 +71,13 @@ export function AuditView() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Auditoria" description="Registo de acções efectuadas no sistema" />
+      <PageHeader title={t('audit.title')} description={t('audit.subtitle')} />
 
       {/* Filtros */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_220px_200px]">
         <div className="space-y-1.5">
           <Label htmlFor="audit-search" className="text-xs text-muted-foreground">
-            Pesquisar
+            {t('common.search')}
           </Label>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
@@ -83,24 +85,24 @@ export function AuditView() {
               id="audit-search"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Entidade, detalhes ou actor…"
+              placeholder={t('audit.searchPlaceholder')}
               className="h-11 pl-10"
             />
           </div>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="audit-action" className="text-xs text-muted-foreground">
-            Acção
+            {t('audit.actionLabel')}
           </Label>
           <Select value={action} onValueChange={setAction}>
             <SelectTrigger id="audit-action" className="h-11 w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Todas as acções</SelectItem>
+              <SelectItem value="ALL">{t('audit.allActions')}</SelectItem>
               {AUDIT_ACTIONS.map((a) => (
                 <SelectItem key={a} value={a}>
-                  {auditActionLabel(a)}
+                  {L.auditAction(a)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -108,17 +110,17 @@ export function AuditView() {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="audit-entity" className="text-xs text-muted-foreground">
-            Entidade
+            {t('audit.entityLabel')}
           </Label>
           <Select value={entityType} onValueChange={setEntityType}>
             <SelectTrigger id="audit-entity" className="h-11 w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">Todas as entidades</SelectItem>
-              {AUDIT_ENTITY_TYPES.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {entityLabel(t)}
+              <SelectItem value="ALL">{t('audit.allEntities')}</SelectItem>
+              {AUDIT_ENTITY_TYPES.map((e) => (
+                <SelectItem key={e} value={e}>
+                  {L.entity(e)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -132,20 +134,20 @@ export function AuditView() {
           {error && !loading ? (
             <EmptyState
               icon={CircleAlert}
-              title="Erro ao carregar a auditoria"
+              title={t('audit.errors.loadTitle')}
               description={error}
               action={
                 <Button variant="outline" onClick={() => void load()}>
                   <RefreshCw className="size-4" aria-hidden />
-                  Tentar novamente
+                  {t('common.retry')}
                 </Button>
               }
             />
           ) : !loading && items && items.length === 0 ? (
             <EmptyState
               icon={ScrollText}
-              title="Nenhum registo encontrado"
-              description="Ajuste os filtros para ver mais resultados."
+              title={t('audit.empty.title')}
+              description={t('audit.empty.description')}
               action={
                 <Button
                   variant="outline"
@@ -156,7 +158,7 @@ export function AuditView() {
                     setSearch('')
                   }}
                 >
-                  Limpar filtros
+                  {t('common.clearFilters')}
                 </Button>
               }
             />
@@ -165,11 +167,11 @@ export function AuditView() {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="pl-4">Acção</TableHead>
-                    <TableHead>Entidade</TableHead>
-                    <TableHead>Detalhes</TableHead>
-                    <TableHead>Actor</TableHead>
-                    <TableHead className="pr-4">Quando</TableHead>
+                    <TableHead className="pl-4">{t('audit.table.action')}</TableHead>
+                    <TableHead>{t('audit.table.entity')}</TableHead>
+                    <TableHead>{t('audit.table.details')}</TableHead>
+                    <TableHead>{t('audit.table.actor')}</TableHead>
+                    <TableHead className="pr-4">{t('audit.table.when')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 {loading ? (
@@ -183,7 +185,7 @@ export function AuditView() {
                         </TableCell>
                         <TableCell>
                           <span className="block text-sm font-medium">{a.entityName ?? '—'}</span>
-                          <span className="block text-xs text-muted-foreground">{entityLabel(a.entityType)}</span>
+                          <span className="block text-xs text-muted-foreground">{L.entity(a.entityType)}</span>
                         </TableCell>
                         <TableCell className="max-w-72">
                           <span className="block truncate text-sm text-muted-foreground" title={a.details ?? undefined}>
@@ -203,7 +205,10 @@ export function AuditView() {
               </Table>
               {!loading && items ? (
                 <p className="px-4 pt-3 text-xs text-muted-foreground">
-                  {items.length} {items.length === 1 ? 'registo' : 'registos'} (limite de {AUDIT_LIMIT} por consulta)
+                  {t(
+                    items.length === 1 ? 'audit.recordsOne' : 'audit.recordsMany',
+                    { n: items.length, limit: AUDIT_LIMIT }
+                  )}
                 </p>
               ) : null}
             </>

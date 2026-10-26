@@ -32,7 +32,8 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { createPlan, updatePlan } from '@/lib/bms-api'
 import type { ModuleWithCounts, PlanInterval, PlanWithModules } from '@/lib/bms-api'
-import { categoryLabel } from './shared'
+import { useI18n } from '@/lib/i18n'
+import { useLabels } from './shared'
 
 interface FormState {
   name: string
@@ -72,6 +73,8 @@ export function PlanFormDialog({
   const [moduleIds, setModuleIds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const { t } = useI18n()
+  const L = useLabels()
 
   useEffect(() => {
     if (!open) return
@@ -119,11 +122,11 @@ export function PlanFormDialog({
     e.preventDefault()
     setError(null)
     if (!form.name.trim()) {
-      setError('O nome do plano é obrigatório.')
+      setError(t('plans.form.errors.nameRequired'))
       return
     }
     if (Number.isNaN(Number(form.price)) || Number(form.price) < 0) {
-      setError('O preço deve ser um número igual ou superior a 0.')
+      setError(t('plans.form.errors.priceInvalid'))
       return
     }
     setSaving(true)
@@ -146,7 +149,7 @@ export function PlanFormDialog({
       onSaved()
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível guardar o plano.')
+      setError(err instanceof Error ? err.message : t('plans.form.errors.save'))
     } finally {
       setSaving(false)
     }
@@ -156,9 +159,9 @@ export function PlanFormDialog({
     <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
       <DialogContent className="max-h-[85vh] overflow-y-auto scrollbar-thin sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Editar plano' : 'Novo plano'}</DialogTitle>
+          <DialogTitle>{isEdit ? t('plans.form.editTitle') : t('plans.newPlan')}</DialogTitle>
           <DialogDescription>
-            Defina o preço em meticais, limites e os módulos incluídos no plano.
+            {t('plans.form.subtitle')}
           </DialogDescription>
         </DialogHeader>
 
@@ -173,19 +176,19 @@ export function PlanFormDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="plan-name">
-                Nome <span className="text-rose-600 dark:text-rose-400">*</span>
+                {t('plans.form.name')} <span className="text-rose-600 dark:text-rose-400">*</span>
               </Label>
               <Input
                 id="plan-name"
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="Ex: Profissional"
+                placeholder={t('plans.form.namePlaceholder')}
                 disabled={saving}
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="plan-price">Preço (MZN por mês)</Label>
+              <Label htmlFor="plan-price">{t('plans.form.price')}</Label>
               <Input
                 id="plan-price"
                 type="number"
@@ -197,7 +200,7 @@ export function PlanFormDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="plan-interval">Intervalo de facturação</Label>
+              <Label htmlFor="plan-interval">{t('plans.form.interval')}</Label>
               <Select
                 value={form.interval}
                 onValueChange={(v) => setForm((p) => ({ ...p, interval: v as PlanInterval }))}
@@ -207,13 +210,13 @@ export function PlanFormDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="MONTHLY">Mensal</SelectItem>
-                  <SelectItem value="YEARLY">Anual</SelectItem>
+                  <SelectItem value="MONTHLY">{t('plans.form.monthly')}</SelectItem>
+                  <SelectItem value="YEARLY">{t('plans.form.yearly')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="plan-maxusers">Máx. utilizadores</Label>
+              <Label htmlFor="plan-maxusers">{t('plans.form.maxUsers')}</Label>
               <Input
                 id="plan-maxusers"
                 type="number"
@@ -224,47 +227,47 @@ export function PlanFormDialog({
               />
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="plan-description">Descrição</Label>
+              <Label htmlFor="plan-description">{t('plans.form.description')}</Label>
               <Textarea
                 id="plan-description"
                 value={form.description}
                 onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                placeholder="Para que tipo de empresa é este plano?"
+                placeholder={t('plans.form.descriptionPlaceholder')}
                 rows={2}
                 disabled={saving}
               />
             </div>
             <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
               <span className="text-sm">
-                <span className="font-medium">Plano popular</span>
-                <span className="block text-xs text-muted-foreground">Destaque no site público</span>
+                <span className="font-medium">{t('plans.form.popularLabel')}</span>
+                <span className="block text-xs text-muted-foreground">{t('plans.form.popularHint')}</span>
               </span>
               <Switch
                 checked={form.isPopular}
                 onCheckedChange={(v) => setForm((p) => ({ ...p, isPopular: v }))}
                 disabled={saving}
-                aria-label="Plano popular"
+                aria-label={t('plans.form.popularLabel')}
               />
             </label>
             <label className="flex items-center justify-between gap-3 rounded-lg border p-3">
               <span className="text-sm">
-                <span className="font-medium">Plano activo</span>
-                <span className="block text-xs text-muted-foreground">Disponível para novas empresas</span>
+                <span className="font-medium">{t('plans.form.activeLabel')}</span>
+                <span className="block text-xs text-muted-foreground">{t('plans.form.activeHint')}</span>
               </span>
               <Switch
                 checked={form.isActive}
                 onCheckedChange={(v) => setForm((p) => ({ ...p, isActive: v }))}
                 disabled={saving}
-                aria-label="Plano activo"
+                aria-label={t('plans.form.activeLabel')}
               />
             </label>
           </div>
 
           {/* Módulos por categoria */}
           <div className="space-y-3">
-            <Label>Módulos incluídos ({moduleIds.length})</Label>
+            <Label>{t('plans.form.modulesIncluded', { n: moduleIds.length })}</Label>
             {grouped.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhum módulo activo disponível.</p>
+              <p className="text-sm text-muted-foreground">{t('plans.form.noModules')}</p>
             ) : (
               grouped.map(([category, mods]) => {
                 const allChecked = mods.every((m) => moduleIds.includes(m.id))
@@ -276,10 +279,10 @@ export function PlanFormDialog({
                         checked={allChecked ? true : someChecked ? 'indeterminate' : false}
                         onCheckedChange={(v) => toggleCategory(category, mods, v === true)}
                         disabled={saving}
-                        aria-label={`Seleccionar todos os módulos de ${categoryLabel(category)}`}
+                        aria-label={t('plans.form.selectAllInCategory', { category: L.category(category) })}
                       />
                       <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        {categoryLabel(category)}
+                        {L.category(category)}
                       </span>
                     </label>
                     <div className="grid gap-x-4 p-3 sm:grid-cols-2">
@@ -289,7 +292,7 @@ export function PlanFormDialog({
                             checked={moduleIds.includes(m.id)}
                             onCheckedChange={(v) => toggleModule(m.id, v === true)}
                             disabled={saving}
-                            aria-label={`Incluir módulo ${m.name}`}
+                            aria-label={t('plans.form.includeModule', { name: m.name })}
                           />
                           <span className="min-w-0 text-sm">{m.name}</span>
                         </label>
@@ -303,11 +306,11 @@ export function PlanFormDialog({
 
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={saving}>
               {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              {isEdit ? 'Guardar alterações' : 'Criar plano'}
+              {isEdit ? t('plans.form.saveChanges') : t('plans.form.create')}
             </Button>
           </DialogFooter>
         </form>

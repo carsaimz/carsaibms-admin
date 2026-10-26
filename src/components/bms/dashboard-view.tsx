@@ -2,6 +2,7 @@
 
 /**
  * DashboardView — visão geral da plataforma com estatísticas e gráficos.
+ * Textos via i18n (pt-MZ / en); meses via Intl no locale activo.
  */
 
 import { useCallback, useEffect, useState } from 'react'
@@ -39,7 +40,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { getDashboard } from '@/lib/bms-api'
 import type { DashboardStats } from '@/lib/bms-api'
-import { formatMZN, formatRelative, initials } from '@/lib/format'
+import { formatMZN, formatRelative, initials, monthShort } from '@/lib/format'
+import { useI18n } from '@/lib/i18n'
 import { AuditBadge, EmptyState, PageHeader, StatCard, StatusBadge, type SectionId } from './shared'
 
 const EMERALD = '#10b981'
@@ -47,14 +49,6 @@ const EMERALD_DARK = '#059669'
 const AMBER = '#f59e0b'
 const ROSE = '#f43f5e'
 const ZINC = '#a1a1aa'
-
-const MONTHS_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
-
-function monthLabel(ym: string): string {
-  const [y, m] = ym.split('-')
-  const idx = Number(m) - 1
-  return `${MONTHS_PT[idx] ?? m}/${(y ?? '').slice(2)}`
-}
 
 const tooltipStyle: React.CSSProperties = {
   backgroundColor: 'var(--popover)',
@@ -65,10 +59,10 @@ const tooltipStyle: React.CSSProperties = {
   boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
 }
 
-function DashboardSkeleton() {
+function DashboardSkeleton({ headerTitle, headerDesc }: { headerTitle: string; headerDesc: string }) {
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" description="Visão geral da plataforma em tempo real" />
+      <PageHeader title={headerTitle} description={headerDesc} />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="rounded-xl border bg-card p-6">
@@ -113,6 +107,7 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { t } = useI18n()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -120,32 +115,34 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
     try {
       setStats(await getDashboard())
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao carregar o painel.')
+      setError(e instanceof Error ? e.message : t('common.networkError'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  if (loading) return <DashboardSkeleton />
+  if (loading) {
+    return <DashboardSkeleton headerTitle={t('dashboard.title')} headerDesc={t('dashboard.subtitle')} />
+  }
 
   if (error || !stats) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Dashboard" description="Visão geral da plataforma em tempo real" />
+        <PageHeader title={t('dashboard.title')} description={t('dashboard.subtitle')} />
         <Card>
           <CardContent>
             <EmptyState
               icon={CircleAlert}
-              title="Não foi possível carregar o painel"
-              description={error ?? 'Verifique a ligação e tente novamente.'}
+              title={t('dashboard.errors.loadFail')}
+              description={error ?? t('common.checkConnection')}
               action={
                 <Button onClick={() => void load()}>
                   <RefreshCw className="size-4" aria-hidden />
-                  Tentar novamente
+                  {t('common.retry')}
                 </Button>
               }
             />
@@ -156,51 +153,51 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
   }
 
   const pieData = [
-    { name: 'Activas', value: stats.companies.active, color: EMERALD },
-    { name: 'Pendentes', value: stats.companies.pending, color: AMBER },
-    { name: 'Suspensas', value: stats.companies.suspended, color: ROSE },
-    { name: 'Canceladas', value: stats.companies.cancelled, color: ZINC },
+    { name: t('statuses.ACTIVE'), value: stats.companies.active, color: EMERALD },
+    { name: t('statuses.PENDING'), value: stats.companies.pending, color: AMBER },
+    { name: t('statuses.SUSPENDED'), value: stats.companies.suspended, color: ROSE },
+    { name: t('statuses.CANCELLED'), value: stats.companies.cancelled, color: ZINC },
   ].filter((d) => d.value > 0)
 
-  const growthData = stats.growth.map((g) => ({ label: monthLabel(g.month), count: g.count }))
+  const growthData = stats.growth.map((g) => ({ label: monthShort(g.month), count: g.count }))
 
   const billingData = stats.billing.series.map((s) => ({
-    label: monthLabel(s.month),
-    Emitido: s.issued,
-    Cobrado: s.paid,
+    label: monthShort(s.month),
+    issued: s.issued,
+    paid: s.paid,
   }))
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Dashboard" description="Visão geral da plataforma em tempo real" />
+      <PageHeader title={t('dashboard.title')} description={t('dashboard.subtitle')} />
 
       {/* Estatísticas */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="Empresas activas"
+          title={t('dashboard.stats.activeCompanies')}
           value={stats.companies.active}
-          hint={`${stats.companies.total} empresas no total`}
+          hint={t('dashboard.stats.totalCompaniesHint', { n: stats.companies.total })}
           icon={Building2}
           tone="emerald"
         />
         <StatCard
-          title="MRR estimado"
+          title={t('dashboard.stats.mrr')}
           value={formatMZN(stats.mrr)}
-          hint="Receita mensal recorrente"
+          hint={t('dashboard.stats.mrrHint')}
           icon={Wallet}
           tone="emerald"
         />
         <StatCard
-          title="Módulos activos"
+          title={t('dashboard.stats.activeModules')}
           value={stats.activeModules}
-          hint={`${stats.moduleUsage.length} módulos em uso`}
+          hint={t('dashboard.stats.modulesInUseHint', { n: stats.moduleUsage.length })}
           icon={Blocks}
           tone="amber"
         />
         <StatCard
-          title="Utilizadores do painel"
+          title={t('dashboard.stats.panelUsers')}
           value={stats.adminUsers}
-          hint="Contas com acesso activo"
+          hint={t('dashboard.stats.panelUsersHint')}
           icon={UserCog}
           tone="zinc"
         />
@@ -209,30 +206,30 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
       {/* Estatísticas — telemetria e facturação */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="Instâncias activas"
+          title={t('dashboard.stats.activeInstances')}
           value={stats.instances.active24h}
-          hint={`${stats.instances.total} instaladas`}
+          hint={t('dashboard.stats.installedHint', { n: stats.instances.total })}
           icon={Radar}
           tone="emerald"
         />
         <StatCard
-          title="Em aberto"
+          title={t('dashboard.stats.open')}
           value={stats.billing.open.count}
           hint={formatMZN(stats.billing.open.amount)}
           icon={FileText}
           tone="amber"
         />
         <StatCard
-          title="Em atraso"
+          title={t('dashboard.stats.overdue')}
           value={stats.billing.overdue.count}
           hint={formatMZN(stats.billing.overdue.amount)}
           icon={CircleAlert}
           tone="rose"
         />
         <StatCard
-          title="Cobrado este mês"
+          title={t('dashboard.stats.paidThisMonth')}
           value={formatMZN(stats.billing.paidMonth.amount)}
-          hint={`${stats.billing.paidMonth.count} facturas pagas`}
+          hint={t('dashboard.stats.paidInvoicesHint', { n: stats.billing.paidMonth.count })}
           icon={CircleCheck}
           tone="emerald"
         />
@@ -242,12 +239,12 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Empresas por plano</CardTitle>
-            <CardDescription>Distribuição de clientes por plano de subscrição</CardDescription>
+            <CardTitle className="text-base">{t('dashboard.charts.companiesByPlan')}</CardTitle>
+            <CardDescription>{t('dashboard.charts.companiesByPlanDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
             {stats.companiesByPlan.length === 0 ? (
-              <EmptyState icon={Building2} title="Sem dados" description="Ainda não existem empresas associadas a planos." />
+              <EmptyState icon={Building2} title={t('common.noData')} description={t('dashboard.errors.emptyByPlan')} />
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={stats.companiesByPlan} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
@@ -261,7 +258,7 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
                   />
                   <YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#71717a' }} />
                   <RechartsTooltip cursor={{ fill: 'rgba(16,185,129,0.07)' }} contentStyle={tooltipStyle} />
-                  <Bar dataKey="count" name="Empresas" fill={EMERALD_DARK} radius={[6, 6, 0, 0]} maxBarSize={44} />
+                  <Bar dataKey="count" name={t('dashboard.charts.seriesCompanies')} fill={EMERALD_DARK} radius={[6, 6, 0, 0]} maxBarSize={44} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -270,12 +267,12 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Estados das empresas</CardTitle>
-            <CardDescription>Activa, pendente, suspensa e cancelada</CardDescription>
+            <CardTitle className="text-base">{t('dashboard.charts.companyStates')}</CardTitle>
+            <CardDescription>{t('dashboard.charts.companyStatesDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
             {pieData.length === 0 ? (
-              <EmptyState icon={Building2} title="Sem dados" description="Ainda não existem empresas registadas." />
+              <EmptyState icon={Building2} title={t('common.noData')} description={t('dashboard.errors.emptyStates')} />
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
@@ -302,12 +299,12 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Crescimento — 6 meses</CardTitle>
-            <CardDescription>Novas empresas criadas por mês</CardDescription>
+            <CardTitle className="text-base">{t('dashboard.charts.growth')}</CardTitle>
+            <CardDescription>{t('dashboard.charts.growthDesc')}</CardDescription>
           </CardHeader>
           <CardContent>
             {growthData.length === 0 ? (
-              <EmptyState icon={Building2} title="Sem dados" description="Ainda não há crescimento para mostrar." />
+              <EmptyState icon={Building2} title={t('common.noData')} description={t('dashboard.errors.emptyGrowth')} />
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <AreaChart data={growthData} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
@@ -324,7 +321,7 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
                   <Area
                     type="monotone"
                     dataKey="count"
-                    name="Novas empresas"
+                    name={t('dashboard.charts.seriesNewCompanies')}
                     stroke={EMERALD_DARK}
                     strokeWidth={2}
                     fill="url(#growthFill)"
@@ -339,12 +336,12 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
       {/* Facturação — últimos 6 meses */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Facturação — últimos 6 meses</CardTitle>
-          <CardDescription>Emitido vs. cobrado por mês</CardDescription>
+          <CardTitle className="text-base">{t('dashboard.charts.billing6')}</CardTitle>
+          <CardDescription>{t('dashboard.charts.billing6Desc')}</CardDescription>
         </CardHeader>
         <CardContent>
           {billingData.length === 0 ? (
-            <EmptyState icon={FileText} title="Sem dados" description="Ainda não existem facturas emitidas." />
+            <EmptyState icon={FileText} title={t('common.noData')} description={t('dashboard.errors.emptyBilling')} />
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={billingData} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
@@ -353,8 +350,8 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#71717a' }} width={64} />
                 <RechartsTooltip cursor={{ fill: 'rgba(16,185,129,0.07)' }} contentStyle={tooltipStyle} />
                 <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="Emitido" fill={AMBER} radius={[6, 6, 0, 0]} maxBarSize={28} />
-                <Bar dataKey="Cobrado" fill={EMERALD_DARK} radius={[6, 6, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="issued" name={t('dashboard.charts.seriesIssued')} fill={AMBER} radius={[6, 6, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="paid" name={t('dashboard.charts.seriesPaid')} fill={EMERALD_DARK} radius={[6, 6, 0, 0]} maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -366,17 +363,17 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div className="min-w-0">
-              <CardTitle className="text-base">Últimas empresas</CardTitle>
-              <CardDescription>Os 6 registos mais recentes</CardDescription>
+              <CardTitle className="text-base">{t('dashboard.lists.latestCompanies')}</CardTitle>
+              <CardDescription>{t('dashboard.lists.latestCompaniesDesc')}</CardDescription>
             </div>
             <Button variant="ghost" size="sm" className="h-9 shrink-0" onClick={() => onNavigate?.('companies')}>
-              Ver todas
+              {t('common.seeAll')}
               <ArrowRight className="size-4" aria-hidden />
             </Button>
           </CardHeader>
           <CardContent>
             {stats.recentCompanies.length === 0 ? (
-              <EmptyState icon={Building2} title="Nenhuma empresa" description="As novas empresas aparecerão aqui." />
+              <EmptyState icon={Building2} title={t('dashboard.lists.noCompanies')} description={t('dashboard.lists.noCompaniesDesc')} />
             ) : (
               <div className="divide-y">
                 {stats.recentCompanies.map((c) => (
@@ -402,17 +399,17 @@ export function DashboardView({ onNavigate }: { onNavigate?: (section: SectionId
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <div className="min-w-0">
-              <CardTitle className="text-base">Actividade recente</CardTitle>
-              <CardDescription>Últimas acções registadas na auditoria</CardDescription>
+              <CardTitle className="text-base">{t('dashboard.lists.recentActivity')}</CardTitle>
+              <CardDescription>{t('dashboard.lists.recentActivityDesc')}</CardDescription>
             </div>
             <Button variant="ghost" size="sm" className="h-9 shrink-0" onClick={() => onNavigate?.('audit')}>
-              Ver auditoria
+              {t('common.viewAudit')}
               <ArrowRight className="size-4" aria-hidden />
             </Button>
           </CardHeader>
           <CardContent>
             {stats.recentAudit.length === 0 ? (
-              <EmptyState icon={History} title="Sem actividade" description="As acções na plataforma aparecerão aqui." />
+              <EmptyState icon={History} title={t('dashboard.lists.noActivity')} description={t('dashboard.lists.noActivityDesc')} />
             ) : (
               <div className="divide-y">
                 {stats.recentAudit.map((a) => (

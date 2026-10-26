@@ -33,9 +33,9 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { createModule, deleteModule, listModules, updateModule } from '@/lib/bms-api'
 import type { ModulePayload, ModuleWithCounts } from '@/lib/bms-api'
+import { useI18n } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import {
-  categoryLabel,
   ConfirmDialog,
   EmptyState,
   HintTooltip,
@@ -44,6 +44,7 @@ import {
   ModuleIcon,
   PageHeader,
   StatusBadge,
+  useLabels,
 } from './shared'
 
 export function ModulesView() {
@@ -54,6 +55,8 @@ export function ModulesView() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<ModuleWithCounts | null>(null)
   const [toDelete, setToDelete] = useState<ModuleWithCounts | null>(null)
+  const { t } = useI18n()
+  const L = useLabels()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -61,11 +64,11 @@ export function ModulesView() {
     try {
       setModules(await listModules())
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao carregar módulos.')
+      setError(e instanceof Error ? e.message : t('modules.errors.load'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -85,9 +88,13 @@ export function ModulesView() {
     try {
       const updated = await updateModule(mod.id, { isActive: active })
       setModules((prev) => prev?.map((m) => (m.id === mod.id ? { ...m, isActive: updated.isActive } : m)) ?? prev)
-      toast.success(active ? `Módulo "${mod.name}" activado.` : `Módulo "${mod.name}" desactivado.`)
+      toast.success(
+        active
+          ? t('modules.toasts.activated', { name: mod.name })
+          : t('modules.toasts.deactivated', { name: mod.name })
+      )
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao actualizar o módulo.')
+      toast.error(e instanceof Error ? e.message : t('modules.toasts.updateError'))
     }
   }
 
@@ -95,16 +102,16 @@ export function ModulesView() {
     if (!toDelete) return
     try {
       await deleteModule(toDelete.id)
-      toast.success(`Módulo "${toDelete.name}" eliminado.`)
+      toast.success(t('modules.toasts.deleted', { name: toDelete.name }))
       void load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao eliminar o módulo.')
+      toast.error(e instanceof Error ? e.message : t('modules.toasts.deleteError'))
     }
   }
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Módulos" description="Módulos do sistema BMS — activação global por plano e por empresa">
+      <PageHeader title={t('modules.title')} description={t('modules.subtitle')}>
         <Button
           onClick={() => {
             setEditing(null)
@@ -113,7 +120,7 @@ export function ModulesView() {
           className="h-11"
         >
           <Plus className="size-4" aria-hidden />
-          Novo módulo
+          {t('modules.newModule')}
         </Button>
       </PageHeader>
 
@@ -142,12 +149,12 @@ export function ModulesView() {
           <CardContent>
             <EmptyState
               icon={CircleAlert}
-              title="Erro ao carregar módulos"
+              title={t('modules.errors.loadTitle')}
               description={error}
               action={
                 <Button variant="outline" onClick={() => void load()}>
                   <RefreshCw className="size-4" aria-hidden />
-                  Tentar novamente
+                  {t('common.retry')}
                 </Button>
               }
             />
@@ -158,8 +165,8 @@ export function ModulesView() {
           <CardContent>
             <EmptyState
               icon={Blocks}
-              title="Nenhum módulo"
-              description="Crie o primeiro módulo do sistema BMS."
+              title={t('modules.empty.title')}
+              description={t('modules.empty.description')}
               action={
                 <Button
                   onClick={() => {
@@ -168,7 +175,7 @@ export function ModulesView() {
                   }}
                 >
                   <Plus className="size-4" aria-hidden />
-                  Novo módulo
+                  {t('modules.newModule')}
                 </Button>
               }
             />
@@ -179,10 +186,10 @@ export function ModulesView() {
           <section key={category} className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                {categoryLabel(category)}
+                {L.category(category)}
               </h3>
               <span className="text-xs tabular-nums text-muted-foreground">
-                {mods.filter((m) => m.isActive).length}/{mods.length} activos
+                {t('modules.activeCount', { n: mods.filter((m) => m.isActive).length, total: mods.length })}
               </span>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -196,16 +203,20 @@ export function ModulesView() {
                       <Switch
                         checked={m.isActive}
                         onCheckedChange={(v) => void handleToggleActive(m, v)}
-                        aria-label={m.isActive ? `Desactivar módulo ${m.name}` : `Activar módulo ${m.name}`}
+                        aria-label={
+                          m.isActive
+                            ? t('modules.toggleDeactivate', { name: m.name })
+                            : t('modules.toggleActivate', { name: m.name })
+                        }
                       />
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-1.5">
                         <h4 className="truncate font-medium">{m.name}</h4>
                         {m.isCore ? (
-                          <HintTooltip hint="Módulo essencial do núcleo — não pode ser desactivado nem eliminado.">
+                          <HintTooltip hint={t('modules.coreHint')}>
                             <span className="cursor-help rounded border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
-                              Essencial
+                              {t('modules.coreBadge')}
                             </span>
                           </HintTooltip>
                         ) : null}
@@ -217,16 +228,16 @@ export function ModulesView() {
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1.5">
                         <Building2 className="size-3.5" aria-hidden />
-                        {m.companiesCount} empresas
+                        {t('modules.companiesCount', { n: m.companiesCount })}
                       </span>
                       <span className="flex items-center gap-1.5">
                         <CreditCard className="size-3.5" aria-hidden />
-                        {m.plansCount} planos
+                        {t('modules.plansCount', { n: m.plansCount })}
                       </span>
                       <span className="ml-auto">
                         <StatusBadge
                           status={m.isActive ? 'ACTIVE' : 'INACTIVE'}
-                          labels={{ ACTIVE: 'Activo', INACTIVE: 'Inactivo' }}
+                          labels={{ ACTIVE: t('modules.statusActive'), INACTIVE: t('modules.statusInactive') }}
                         />
                       </span>
                     </div>
@@ -242,15 +253,15 @@ export function ModulesView() {
                         }}
                       >
                         <Pencil className="size-4" aria-hidden />
-                        Editar
+                        {t('common.edit')}
                       </Button>
                       {m.isCore ? null : (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="size-10 text-rose-600 hover:bg-rose-500/10 hover:text-rose-600 dark:text-rose-400"
-                          aria-label={`Eliminar módulo ${m.name}`}
-                          title="Eliminar"
+                          aria-label={t('modules.deleteAria', { name: m.name })}
+                          title={t('common.delete')}
                           onClick={() => setToDelete(m)}
                         >
                           <Trash2 className="size-4" aria-hidden />
@@ -275,9 +286,9 @@ export function ModulesView() {
       <ConfirmDialog
         open={toDelete !== null}
         onOpenChange={(o) => !o && setToDelete(null)}
-        title={`Eliminar módulo "${toDelete?.name ?? ''}"?`}
-        description="O módulo deixará de estar disponível em planos e empresas. Esta acção não pode ser revertida."
-        confirmLabel="Eliminar"
+        title={t('modules.deleteConfirmTitle', { name: toDelete?.name ?? '' })}
+        description={t('modules.deleteConfirmDesc')}
+        confirmLabel={t('common.delete')}
         onConfirm={handleDelete}
       />
     </div>
@@ -323,6 +334,7 @@ function ModuleFormDialog({
   const [form, setForm] = useState<ModuleFormState>(EMPTY_MODULE_FORM)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const { t } = useI18n()
 
   useEffect(() => {
     if (!open) return
@@ -346,7 +358,7 @@ function ModuleFormDialog({
     e.preventDefault()
     setError(null)
     if (!form.name.trim()) {
-      setError('O nome do módulo é obrigatório.')
+      setError(t('modules.form.errors.nameRequired'))
       return
     }
     setSaving(true)
@@ -372,7 +384,7 @@ function ModuleFormDialog({
       onSaved()
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível guardar o módulo.')
+      setError(err instanceof Error ? err.message : t('modules.form.errors.save'))
     } finally {
       setSaving(false)
     }
@@ -382,9 +394,9 @@ function ModuleFormDialog({
     <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
       <DialogContent className="max-h-[85vh] overflow-y-auto scrollbar-thin sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Editar módulo' : 'Novo módulo'}</DialogTitle>
+          <DialogTitle>{isEdit ? t('modules.form.editTitle') : t('modules.newModule')}</DialogTitle>
           <DialogDescription>
-            Os módulos são activáveis por plano e por empresa nas respectivas páginas.
+            {t('modules.form.subtitle')}
           </DialogDescription>
         </DialogHeader>
 
@@ -397,13 +409,13 @@ function ModuleFormDialog({
 
           <div className="space-y-2">
             <Label htmlFor="module-name">
-              Nome <span className="text-rose-600 dark:text-rose-400">*</span>
+              {t('modules.form.name')} <span className="text-rose-600 dark:text-rose-400">*</span>
             </Label>
             <Input
               id="module-name"
               value={form.name}
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              placeholder="Ex: Gestão de Frotas"
+              placeholder={t('modules.form.namePlaceholder')}
               disabled={saving}
               required
             />
@@ -411,24 +423,24 @@ function ModuleFormDialog({
 
           {!isEdit ? (
             <div className="space-y-2">
-              <Label htmlFor="module-key">Chave (slug)</Label>
+              <Label htmlFor="module-key">{t('modules.form.key')}</Label>
               <Input
                 id="module-key"
                 value={form.key}
                 onChange={(e) => setForm((p) => ({ ...p, key: e.target.value }))}
-                placeholder="ex: frotas — gerada automaticamente se ficar vazia"
+                placeholder={t('modules.form.keyPlaceholder')}
                 disabled={saving}
               />
             </div>
           ) : null}
 
           <div className="space-y-2">
-            <Label htmlFor="module-description">Descrição</Label>
+            <Label htmlFor="module-description">{t('modules.form.description')}</Label>
             <Textarea
               id="module-description"
               value={form.description}
               onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-              placeholder="O que faz este módulo?"
+              placeholder={t('modules.form.descriptionPlaceholder')}
               rows={2}
               disabled={saving}
             />
@@ -436,7 +448,7 @@ function ModuleFormDialog({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="module-icon">Ícone</Label>
+              <Label htmlFor="module-icon">{t('modules.form.icon')}</Label>
               <Select value={form.icon} onValueChange={(v) => setForm((p) => ({ ...p, icon: v }))} disabled={saving}>
                 <SelectTrigger id="module-icon" className="w-full [&>span]:flex [&>span]:items-center [&>span]:gap-2">
                   <SelectValue />
@@ -454,12 +466,12 @@ function ModuleFormDialog({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="module-category">Categoria</Label>
+              <Label htmlFor="module-category">{t('modules.form.category')}</Label>
               <Input
                 id="module-category"
                 value={form.category}
                 onChange={(e) => setForm((p) => ({ ...p, category: e.target.value.toUpperCase() }))}
-                placeholder="ex: VENDAS"
+                placeholder={t('modules.form.categoryPlaceholder')}
                 disabled={saving}
               />
             </div>
@@ -468,7 +480,7 @@ function ModuleFormDialog({
           {isEdit ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="module-sort">Ordem</Label>
+                <Label htmlFor="module-sort">{t('modules.form.sortOrder')}</Label>
                 <Input
                   id="module-sort"
                   type="number"
@@ -478,12 +490,12 @@ function ModuleFormDialog({
                 />
               </div>
               <label className="flex items-center justify-between gap-3 self-end rounded-lg border p-3">
-                <span className="text-sm font-medium">Módulo activo</span>
+                <span className="text-sm font-medium">{t('modules.form.activeLabel')}</span>
                 <Switch
                   checked={form.isActive}
                   onCheckedChange={(v) => setForm((p) => ({ ...p, isActive: v }))}
                   disabled={saving}
-                  aria-label="Módulo activo"
+                  aria-label={t('modules.form.activeLabel')}
                 />
               </label>
             </div>
@@ -491,11 +503,11 @@ function ModuleFormDialog({
 
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={saving}>
               {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              {isEdit ? 'Guardar alterações' : 'Criar módulo'}
+              {isEdit ? t('modules.form.saveChanges') : t('modules.form.create')}
             </Button>
           </DialogFooter>
         </form>

@@ -65,6 +65,7 @@ import type {
   PaymentMethod,
 } from '@/lib/bms-api'
 import { formatMZN, formatDate } from '@/lib/format'
+import { useI18n } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { ConfirmDialog, EmptyState, PageHeader, StatCard, TableSkeleton } from './shared'
 
@@ -72,50 +73,26 @@ import { ConfirmDialog, EmptyState, PageHeader, StatCard, TableSkeleton } from '
 /* Helpers locais                                                      */
 /* ------------------------------------------------------------------ */
 
-const INVOICE_STATUS_META: Record<InvoiceStatus, { label: string; className: string }> = {
-  OPEN: {
-    label: 'Em aberto',
-    className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
-  },
-  PAID: {
-    label: 'Paga',
-    className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
-  },
-  OVERDUE: {
-    label: 'Em atraso',
-    className: 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400',
-  },
-  CANCELLED: {
-    label: 'Cancelada',
-    className: 'border-zinc-500/25 bg-zinc-500/10 text-zinc-600 dark:text-zinc-400',
-  },
+/** Cores por estado da factura — os rótulos vêm do núcleo i18n (statuses.*). */
+const INVOICE_STATUS_META: Record<InvoiceStatus, string> = {
+  OPEN: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+  PAID: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+  OVERDUE: 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400',
+  CANCELLED: 'border-zinc-500/25 bg-zinc-500/10 text-zinc-600 dark:text-zinc-400',
 }
 
 /** Badge local de estado da factura (não reutiliza o StatusBadge de empresas). */
 export function InvoiceBadge({ status }: { status: InvoiceStatus }) {
+  const { t } = useI18n()
   const meta = INVOICE_STATUS_META[status] ?? INVOICE_STATUS_META.CANCELLED
   return (
-    <Badge variant="outline" className={cn('whitespace-nowrap px-2 py-0.5', meta.className)}>
-      {meta.label}
+    <Badge variant="outline" className={cn('whitespace-nowrap px-2 py-0.5', meta)}>
+      {t(`statuses.${status}`)}
     </Badge>
   )
 }
 
-export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  MPESA: 'M-Pesa',
-  EMOLA: 'e-Mola',
-  TRANSFER: 'Transferência',
-  CASH: 'Numerário',
-  CARD: 'Cartão',
-}
-
-const ALL_STATUSES: Array<{ value: InvoiceStatus | 'ALL'; label: string }> = [
-  { value: 'ALL', label: 'Todos os estados' },
-  { value: 'OPEN', label: 'Em aberto' },
-  { value: 'PAID', label: 'Paga' },
-  { value: 'OVERDUE', label: 'Em atraso' },
-  { value: 'CANCELLED', label: 'Cancelada' },
-]
+const ALL_STATUSES: Array<InvoiceStatus | 'ALL'> = ['ALL', 'OPEN', 'PAID', 'OVERDUE', 'CANCELLED']
 
 const PAYMENT_METHODS: PaymentMethod[] = ['MPESA', 'EMOLA', 'TRANSFER', 'CASH', 'CARD']
 
@@ -144,9 +121,10 @@ function addDays(ymd: string, days: number): string {
 }
 
 function BillingSkeleton() {
+  const { t } = useI18n()
   return (
     <div className="space-y-6">
-      <PageHeader title="Facturação" description="Facturas de subscrição das empresas cliente" />
+      <PageHeader title={t('billing.title')} description={t('billing.description')} />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
           <div key={i} className="rounded-xl border bg-card p-6">
@@ -180,6 +158,7 @@ function BillingSkeleton() {
 /* ------------------------------------------------------------------ */
 
 export function BillingView() {
+  const { t } = useI18n()
   const [data, setData] = useState<InvoicesResponse | null>(null)
   const [companies, setCompanies] = useState<CompanyListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -222,11 +201,11 @@ export function BillingView() {
       setData(inv)
       setCompanies(comp?.items ?? [])
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao carregar a facturação.')
+      setError(e instanceof Error ? e.message : t('billing.errors.loadFallback'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -277,17 +256,17 @@ export function BillingView() {
   async function handleGenerate() {
     if (generating) return
     if (!/^\d{4}-\d{2}$/.test(generateMonth)) {
-      toast.error('Escolha um mês válido.')
+      toast.error(t('billing.toasts.invalidMonth'))
       return
     }
     setGenerating(true)
     try {
       const res = await generateInvoices(generateMonth)
-      toast.success(`${res.created} facturas geradas, ${res.skipped} já existentes`)
+      toast.success(t('billing.toasts.generated', { created: res.created, skipped: res.skipped }))
       setGenerateOpen(false)
       await load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao gerar facturas.')
+      toast.error(e instanceof Error ? e.message : t('billing.toasts.generateFail'))
     } finally {
       setGenerating(false)
     }
@@ -296,16 +275,16 @@ export function BillingView() {
   async function handleCreate() {
     if (creating) return
     if (!createCompanyId) {
-      toast.error('Escolha a empresa.')
+      toast.error(t('billing.toasts.chooseCompany'))
       return
     }
     const amount = Number(createAmount)
     if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('Indique um valor válido maior que zero.')
+      toast.error(t('billing.toasts.invalidAmount'))
       return
     }
     if (!createStart || !createEnd || !createDue) {
-      toast.error('Preencha o período e a data de vencimento.')
+      toast.error(t('billing.toasts.missingDates'))
       return
     }
     const company = companies.find((c) => c.id === createCompanyId)
@@ -320,11 +299,11 @@ export function BillingView() {
         planName: company?.plan?.name,
         notes: createNotes.trim() || undefined,
       })
-      toast.success(`Factura ${res.invoice.number} criada.`)
+      toast.success(t('billing.toasts.created', { number: res.invoice.number }))
       setCreateOpen(false)
       await load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao criar a factura.')
+      toast.error(e instanceof Error ? e.message : t('billing.toasts.createFail'))
     } finally {
       setCreating(false)
     }
@@ -340,11 +319,11 @@ export function BillingView() {
     setPaying(true)
     try {
       await updateInvoice(payTarget.id, { status: 'PAID', method: payMethod })
-      toast.success(`Factura ${payTarget.number} marcada como paga.`)
+      toast.success(t('billing.toasts.markedPaid', { number: payTarget.number }))
       setPayTarget(null)
       await load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao marcar a factura como paga.')
+      toast.error(e instanceof Error ? e.message : t('billing.toasts.payFail'))
     } finally {
       setPaying(false)
     }
@@ -355,10 +334,10 @@ export function BillingView() {
     setRowBusyId(invoice.id)
     try {
       await updateInvoice(invoice.id, { status: 'OPEN' })
-      toast.success(`Factura ${invoice.number} reaberta.`)
+      toast.success(t('billing.toasts.reopened', { number: invoice.number }))
       await load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao reabrir a factura.')
+      toast.error(e instanceof Error ? e.message : t('billing.toasts.reopenFail'))
     } finally {
       setRowBusyId(null)
     }
@@ -369,11 +348,11 @@ export function BillingView() {
     setRowBusyId(cancelTarget.id)
     try {
       await updateInvoice(cancelTarget.id, { status: 'CANCELLED' })
-      toast.success(`Factura ${cancelTarget.number} cancelada.`)
+      toast.success(t('billing.toasts.cancelled', { number: cancelTarget.number }))
       setCancelTarget(null)
       await load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao cancelar a factura.')
+      toast.error(e instanceof Error ? e.message : t('billing.toasts.cancelFail'))
     } finally {
       setRowBusyId(null)
     }
@@ -384,11 +363,11 @@ export function BillingView() {
     setRowBusyId(deleteTarget.id)
     try {
       await deleteInvoice(deleteTarget.id)
-      toast.success(`Factura ${deleteTarget.number} eliminada.`)
+      toast.success(t('billing.toasts.deleted', { number: deleteTarget.number }))
       setDeleteTarget(null)
       await load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao eliminar a factura.')
+      toast.error(e instanceof Error ? e.message : t('billing.toasts.deleteFail'))
     } finally {
       setRowBusyId(null)
     }
@@ -399,17 +378,17 @@ export function BillingView() {
   if (error && !data) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Facturação" description="Facturas de subscrição das empresas cliente" />
+        <PageHeader title={t('billing.title')} description={t('billing.description')} />
         <Card>
           <CardContent>
             <EmptyState
               icon={CircleAlert}
-              title="Não foi possível carregar a facturação"
+              title={t('billing.errors.loadFail')}
               description={error}
               action={
                 <Button onClick={() => void load()}>
                   <RefreshCw className="size-4" aria-hidden />
-                  Tentar novamente
+                  {t('common.retry')}
                 </Button>
               }
             />
@@ -421,35 +400,35 @@ export function BillingView() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Facturação" description="Facturas de subscrição das empresas cliente" />
+      <PageHeader title={t('billing.title')} description={t('billing.description')} />
 
       {/* KPIs */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="Em aberto"
+          title={t('billing.kpis.open')}
           value={summary.OPEN}
           hint={formatMZN(amounts.OPEN)}
           icon={FileText}
           tone="amber"
         />
         <StatCard
-          title="Em atraso"
+          title={t('billing.kpis.overdue')}
           value={summary.OVERDUE}
           hint={formatMZN(amounts.OVERDUE)}
           icon={CircleAlert}
           tone="rose"
         />
         <StatCard
-          title="Cobrado (total)"
+          title={t('billing.kpis.collected')}
           value={formatMZN(amounts.PAID)}
-          hint={`${summary.PAID} facturas pagas`}
+          hint={t('billing.kpis.collectedHint', { n: summary.PAID })}
           icon={CircleCheck}
           tone="emerald"
         />
         <StatCard
-          title="Taxa de cobrança"
+          title={t('billing.kpis.collectRate')}
           value={`${collectRate}%`}
-          hint={`${summary.PAID} pagas de ${collectible} emitidas`}
+          hint={t('billing.kpis.collectRateHint', { paid: summary.PAID, total: collectible })}
           icon={Percent}
           tone="emerald"
         />
@@ -460,7 +439,7 @@ export function BillingView() {
         <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:max-w-xl">
           <div className="space-y-1.5">
             <Label htmlFor="billing-search" className="text-xs text-muted-foreground">
-              Pesquisar
+              {t('common.search')}
             </Label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
@@ -468,14 +447,14 @@ export function BillingView() {
                 id="billing-search"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Nº da factura ou empresa…"
+                placeholder={t('billing.filters.searchPlaceholder')}
                 className="h-11 pl-10"
               />
             </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="billing-status" className="text-xs text-muted-foreground">
-              Estado
+              {t('billing.filters.status')}
             </Label>
             <Select
               value={statusFilter}
@@ -486,8 +465,8 @@ export function BillingView() {
               </SelectTrigger>
               <SelectContent>
                 {ALL_STATUSES.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
+                  <SelectItem key={s} value={s}>
+                    {s === 'ALL' ? t('billing.filters.allStatuses') : t(`statuses.${s}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -497,11 +476,11 @@ export function BillingView() {
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" className="h-11" onClick={openCreate}>
             <Plus className="size-4" aria-hidden />
-            Nova factura
+            {t('billing.actions.newInvoice')}
           </Button>
           <Button className="h-11" onClick={() => { setGenerateMonth(currentMonth()); setGenerateOpen(true) }}>
             <CalendarPlus className="size-4" aria-hidden />
-            Gerar facturas do mês
+            {t('billing.actions.generateMonth')}
           </Button>
         </div>
       </div>
@@ -512,33 +491,33 @@ export function BillingView() {
           {error && !loading ? (
             <EmptyState
               icon={CircleAlert}
-              title="Erro ao carregar facturas"
+              title={t('billing.errors.loadInvoices')}
               description={error}
               action={
                 <Button variant="outline" onClick={() => void load()}>
                   <RefreshCw className="size-4" aria-hidden />
-                  Tentar novamente
+                  {t('common.retry')}
                 </Button>
               }
             />
           ) : !loading && filtered.length === 0 ? (
             <EmptyState
               icon={FileText}
-              title={hasFilters ? 'Nenhuma factura encontrada' : 'Ainda não existem facturas'}
+              title={hasFilters ? t('billing.empty.filteredTitle') : t('billing.empty.title')}
               description={
                 hasFilters
-                  ? 'Ajuste os filtros de pesquisa para ver mais resultados.'
-                  : 'Gere as facturas do mês para as empresas com planos activos.'
+                  ? t('billing.empty.filteredDescription')
+                  : t('billing.empty.description')
               }
               action={
                 hasFilters ? (
                   <Button variant="outline" onClick={resetFilters}>
-                    Limpar filtros
+                    {t('common.clearFilters')}
                   </Button>
                 ) : (
                   <Button onClick={() => { setGenerateMonth(currentMonth()); setGenerateOpen(true) }}>
                     <CalendarPlus className="size-4" aria-hidden />
-                    Gerar facturas do mês
+                    {t('billing.actions.generateMonth')}
                   </Button>
                 )
               }
@@ -548,15 +527,15 @@ export function BillingView() {
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-card">
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="pl-4">Nº</TableHead>
-                    <TableHead>Empresa</TableHead>
-                    <TableHead>Plano</TableHead>
-                    <TableHead>Período</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
-                    <TableHead>Vencimento</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Pagamento</TableHead>
-                    <TableHead className="pr-4 text-right">Acções</TableHead>
+                    <TableHead className="pl-4">{t('billing.table.number')}</TableHead>
+                    <TableHead>{t('billing.table.company')}</TableHead>
+                    <TableHead>{t('billing.table.plan')}</TableHead>
+                    <TableHead>{t('billing.table.period')}</TableHead>
+                    <TableHead className="text-right">{t('billing.table.amount')}</TableHead>
+                    <TableHead>{t('billing.table.dueAt')}</TableHead>
+                    <TableHead>{t('billing.table.status')}</TableHead>
+                    <TableHead>{t('billing.table.payment')}</TableHead>
+                    <TableHead className="pr-4 text-right">{t('billing.table.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 {loading ? (
@@ -583,7 +562,7 @@ export function BillingView() {
                         <TableCell className="text-sm">
                           {inv.status === 'PAID' && inv.method ? (
                             <span className="text-emerald-700 dark:text-emerald-400">
-                              {PAYMENT_METHOD_LABELS[inv.method] ?? inv.method}
+                              {t(`billing.paymentMethods.${inv.method}`)}
                             </span>
                           ) : (
                             <span className="text-muted-foreground">—</span>
@@ -596,7 +575,7 @@ export function BillingView() {
                                 variant="ghost"
                                 size="icon"
                                 className="size-9"
-                                aria-label={`Acções para a factura ${inv.number}`}
+                                aria-label={t('billing.table.rowAria', { number: inv.number })}
                                 disabled={rowBusyId === inv.id}
                               >
                                 {rowBusyId === inv.id ? (
@@ -610,13 +589,13 @@ export function BillingView() {
                               {(inv.status === 'OPEN' || inv.status === 'OVERDUE') && (
                                 <DropdownMenuItem className="cursor-pointer" onClick={() => openPay(inv)}>
                                   <CircleCheck className="size-4" aria-hidden />
-                                  Marcar como paga
+                                  {t('billing.actions.markAsPaid')}
                                 </DropdownMenuItem>
                               )}
                               {(inv.status === 'PAID' || inv.status === 'CANCELLED') && (
                                 <DropdownMenuItem className="cursor-pointer" onClick={() => void handleReopen(inv)}>
                                   <RefreshCw className="size-4" aria-hidden />
-                                  Reabrir
+                                  {t('billing.actions.reopen')}
                                 </DropdownMenuItem>
                               )}
                               {(inv.status === 'OPEN' || inv.status === 'OVERDUE') && (
@@ -626,7 +605,7 @@ export function BillingView() {
                                   onClick={() => setCancelTarget(inv)}
                                 >
                                   <CircleAlert className="size-4" aria-hidden />
-                                  Cancelar
+                                  {t('common.cancel')}
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />
@@ -635,7 +614,7 @@ export function BillingView() {
                                 className="cursor-pointer"
                                 onClick={() => setDeleteTarget(inv)}
                               >
-                                Eliminar
+                                {t('common.delete')}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -654,15 +633,14 @@ export function BillingView() {
       <Dialog open={generateOpen} onOpenChange={setGenerateOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Gerar facturas do mês</DialogTitle>
+            <DialogTitle>{t('billing.generateDialog.title')}</DialogTitle>
             <DialogDescription>
-              Cria facturas para todas as empresas activas com plano mensal. Planos anuais só são facturados em
-              Janeiro. Facturas já existentes para o mês são ignoradas.
+              {t('billing.generateDialog.description')}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="generate-month" className="text-xs text-muted-foreground">
-              Mês de referência
+              {t('billing.generateDialog.month')}
             </Label>
             <Input
               id="generate-month"
@@ -674,11 +652,11 @@ export function BillingView() {
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={generating} onClick={() => setGenerateOpen(false)}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button onClick={() => void handleGenerate()} disabled={generating}>
               {generating ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <CalendarPlus className="size-4" aria-hidden />}
-              Gerar facturas
+              {t('billing.actions.generate')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -688,22 +666,22 @@ export function BillingView() {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Nova factura</DialogTitle>
-            <DialogDescription>Cria uma factura manual para uma empresa cliente.</DialogDescription>
+            <DialogTitle>{t('billing.createDialog.title')}</DialogTitle>
+            <DialogDescription>{t('billing.createDialog.description')}</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="create-company" className="text-xs text-muted-foreground">
-                Empresa
+                {t('billing.createDialog.company')}
               </Label>
               <Select value={createCompanyId} onValueChange={handleCreateCompanyChange}>
-                <SelectTrigger id="create-company" className="h-11 w-full" aria-label="Empresa da factura">
-                  <SelectValue placeholder="Escolher empresa…" />
+                <SelectTrigger id="create-company" className="h-11 w-full" aria-label={t('billing.createDialog.companyAria')}>
+                  <SelectValue placeholder={t('billing.createDialog.companyPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent className="max-h-64">
                   {companies.length === 0 ? (
                     <SelectItem value="_none" disabled>
-                      Sem empresas registadas
+                      {t('billing.createDialog.noCompanies')}
                     </SelectItem>
                   ) : (
                     companies.map((c) => (
@@ -717,7 +695,7 @@ export function BillingView() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="create-amount" className="text-xs text-muted-foreground">
-                Valor (MTn)
+                {t('billing.createDialog.amount')}
               </Label>
               <Input
                 id="create-amount"
@@ -733,7 +711,7 @@ export function BillingView() {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="create-start" className="text-xs text-muted-foreground">
-                  Início do período
+                  {t('billing.createDialog.periodStart')}
                 </Label>
                 <Input
                   id="create-start"
@@ -745,7 +723,7 @@ export function BillingView() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="create-end" className="text-xs text-muted-foreground">
-                  Fim do período
+                  {t('billing.createDialog.periodEnd')}
                 </Label>
                 <Input
                   id="create-end"
@@ -757,7 +735,7 @@ export function BillingView() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="create-due" className="text-xs text-muted-foreground">
-                  Vencimento
+                  {t('billing.createDialog.dueAt')}
                 </Label>
                 <Input
                   id="create-due"
@@ -770,24 +748,24 @@ export function BillingView() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="create-notes" className="text-xs text-muted-foreground">
-                Notas (opcional)
+                {t('billing.createDialog.notes')}
               </Label>
               <Input
                 id="create-notes"
                 value={createNotes}
                 onChange={(e) => setCreateNotes(e.target.value)}
-                placeholder="Ex.: desconto negociado, referência do contrato…"
+                placeholder={t('billing.createDialog.notesPlaceholder')}
                 className="h-11"
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={creating} onClick={() => setCreateOpen(false)}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button onClick={() => void handleCreate()} disabled={creating}>
               {creating ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
-              Criar factura
+              {t('billing.actions.createInvoice')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -797,7 +775,7 @@ export function BillingView() {
       <Dialog open={payTarget !== null} onOpenChange={(o) => { if (!o && !paying) setPayTarget(null) }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Marcar factura como paga</DialogTitle>
+            <DialogTitle>{t('billing.payDialog.title')}</DialogTitle>
             <DialogDescription>
               {payTarget
                 ? `${payTarget.number} · ${payTarget.company?.name ?? '—'} · ${formatMZN(payTarget.amount)}`
@@ -806,16 +784,16 @@ export function BillingView() {
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="pay-method" className="text-xs text-muted-foreground">
-              Método de pagamento
+              {t('billing.payDialog.method')}
             </Label>
             <Select value={payMethod} onValueChange={(v) => setPayMethod(v as PaymentMethod)}>
-              <SelectTrigger id="pay-method" className="h-11 w-full" aria-label="Método de pagamento">
+              <SelectTrigger id="pay-method" className="h-11 w-full" aria-label={t('billing.payDialog.method')}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {PAYMENT_METHODS.map((m) => (
                   <SelectItem key={m} value={m}>
-                    {PAYMENT_METHOD_LABELS[m]}
+                    {t(`billing.paymentMethods.${m}`)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -823,11 +801,11 @@ export function BillingView() {
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={paying} onClick={() => setPayTarget(null)}>
-              Voltar
+              {t('billing.actions.back')}
             </Button>
             <Button onClick={() => void handlePay()} disabled={paying}>
               {paying ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <CircleCheck className="size-4" aria-hidden />}
-              Confirmar pagamento
+              {t('billing.actions.confirmPayment')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -837,9 +815,9 @@ export function BillingView() {
       <ConfirmDialog
         open={cancelTarget !== null}
         onOpenChange={(o) => { if (!o && rowBusyId === null) setCancelTarget(null) }}
-        title={`Cancelar factura ${cancelTarget?.number ?? ''}?`}
-        description={'A factura ficará no estado "Cancelada" e deixará de contar para os valores em aberto. Pode reabri-la mais tarde.'}
-        confirmLabel="Cancelar factura"
+        title={t('billing.confirm.cancelTitle', { number: cancelTarget?.number ?? '' })}
+        description={t('billing.confirm.cancelDescription')}
+        confirmLabel={t('billing.confirm.cancelConfirm')}
         onConfirm={handleCancel}
       />
 
@@ -847,9 +825,9 @@ export function BillingView() {
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => { if (!o && rowBusyId === null) setDeleteTarget(null) }}
-        title={`Eliminar factura ${deleteTarget?.number ?? ''}?`}
-        description="A factura será removida permanentemente. Esta acção não pode ser revertida."
-        confirmLabel="Eliminar"
+        title={t('billing.confirm.deleteTitle', { number: deleteTarget?.number ?? '' })}
+        description={t('billing.confirm.deleteDescription')}
+        confirmLabel={t('common.delete')}
         onConfirm={handleDelete}
       />
     </div>

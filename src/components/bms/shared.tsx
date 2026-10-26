@@ -2,6 +2,7 @@
 
 /**
  * Componentes partilhados do Carsai BMS Admin.
+ * Todos os textos passam pelo sistema i18n (useI18n / useLabels).
  * CarsaiDev — Uma linha, uma solução. 🇲🇿
  */
 
@@ -53,6 +54,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
@@ -61,6 +70,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { useI18n } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
@@ -78,61 +88,32 @@ export type SectionId =
   | 'instances'
   | 'settings'
 
-export function roleLabel(role: string): string {
-  switch (role) {
-    case 'SUPER_ADMIN':
-      return 'Super Admin'
-    case 'ADMIN':
-      return 'Administrador'
-    case 'SUPPORT':
-      return 'Suporte'
-    default:
-      return role
+export const COMPANY_STATUSES = ['ACTIVE', 'PENDING', 'SUSPENDED', 'CANCELLED'] as const
+
+function byKey(t: (path: string) => string, prefix: string, raw: string): string {
+  const path = `${prefix}.${raw}`
+  const out = t(path)
+  return out === path ? raw : out
+}
+
+/**
+ * Tradutores de vocabulário de domínio (estados, papéis, entidades,
+ * acções de auditoria, categorias). Substitui os antigos mapas PT fixos.
+ */
+export function useLabels() {
+  const { t } = useI18n()
+  return {
+    role: (r: string) => byKey(t, 'roles', r),
+    status: (s: string) => byKey(t, 'statuses', s),
+    entity: (e: string) => byKey(t, 'entities', e),
+    auditAction: (a: string) => byKey(t, 'auditActions', a),
+    category: (c: string) => byKey(t, 'categories', c),
   }
 }
 
-export const COMPANY_STATUSES = ['ACTIVE', 'PENDING', 'SUSPENDED', 'CANCELLED'] as const
-
-export const COMPANY_STATUS_LABELS: Record<string, string> = {
-  ACTIVE: 'Activa',
-  PENDING: 'Pendente',
-  SUSPENDED: 'Suspensa',
-  CANCELLED: 'Cancelada',
-}
-
-export const ENTITY_LABELS: Record<string, string> = {
-  Company: 'Empresa',
-  Plan: 'Plano',
-  Module: 'Módulo',
-  User: 'Utilizador',
-  Setting: 'Configuração',
-  Auth: 'Autenticação',
-  CompanyModule: 'Módulo de empresa',
-}
-
-export function entityLabel(entityType: string): string {
-  return ENTITY_LABELS[entityType] ?? entityType
-}
+export type Labels = ReturnType<typeof useLabels>
 
 export const AUDIT_ENTITY_TYPES = ['Company', 'Plan', 'Module', 'User', 'Setting', 'Auth', 'CompanyModule']
-
-const CATEGORY_LABEL_MAP: Record<string, string> = {
-  CORE: 'Núcleo',
-  POS: 'Ponto de Venda',
-  VENDAS: 'Vendas',
-  'INVENTÁRIO': 'Inventário',
-  CRM: 'CRM',
-  RH: 'Recursos Humanos',
-  SUPORTE: 'Suporte',
-  'FINANÇAS': 'Finanças',
-  'CONTEÚDO': 'Conteúdo',
-  WEBSITE: 'Website',
-  'INTEGRAÇÕES': 'Integrações',
-}
-
-export function categoryLabel(category: string): string {
-  return CATEGORY_LABEL_MAP[category] ?? category
-}
 
 /** Máscara de chave: "CARSAI-LIC-AB3D-EF2G-H9IJ" → "CARSAI-••••-••••-H9IJ" */
 export function maskKey(key?: string | null): string {
@@ -147,7 +128,7 @@ export function maskKey(key?: string | null): string {
 }
 
 /* ------------------------------------------------------------------ */
-/* Logo / Spinner / Tema                                               */
+/* Logo / Spinner / Tema / Idioma                                      */
 /* ------------------------------------------------------------------ */
 
 export function Logo({ size = 'md', dark = false }: { size?: 'sm' | 'md' | 'lg'; dark?: boolean }) {
@@ -178,19 +159,22 @@ export function Logo({ size = 'md', dark = false }: { size?: 'sm' | 'md' | 'lg';
 }
 
 export function Spinner({ className }: { className?: string }) {
-  return <Loader2 className={cn('size-5 animate-spin text-emerald-600 dark:text-emerald-400', className)} aria-label="A carregar" />
+  const { t } = useI18n()
+  return <Loader2 className={cn('size-5 animate-spin text-emerald-600 dark:text-emerald-400', className)} aria-label={t('common.loading')} />
 }
 
 export function ThemeToggle({ className }: { className?: string }) {
   const { resolvedTheme, setTheme } = useTheme()
+  const { t } = useI18n()
   const isDark = resolvedTheme === 'dark'
+  const label = isDark ? t('theme.toLight') : t('theme.toDark')
   return (
     <Button
       variant="ghost"
       size="icon"
       className={cn('size-11', className)}
-      aria-label={isDark ? 'Activar tema claro' : 'Activar tema escuro'}
-      title={isDark ? 'Activar tema claro' : 'Activar tema escuro'}
+      aria-label={label}
+      title={label}
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
     >
       <span className="relative flex size-5 items-center justify-center">
@@ -198,6 +182,43 @@ export function ThemeToggle({ className }: { className?: string }) {
         <Moon className="absolute size-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
       </span>
     </Button>
+  )
+}
+
+export function LanguageToggle({ className }: { className?: string }) {
+  const { locale, setLocale, locales, t } = useI18n()
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn('size-11', className)}
+          aria-label={t('lang.toggleAria')}
+          title={t('lang.toggleAria')}
+        >
+          <Globe className="size-5" aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel>{t('lang.label')}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {locales.map((l) => (
+          <DropdownMenuItem
+            key={l.code}
+            onClick={() => setLocale(l.code)}
+            className={cn(
+              'cursor-pointer gap-2',
+              locale === l.code && 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-400'
+            )}
+          >
+            <span aria-hidden>{l.flag}</span>
+            <span className="flex-1">{l.label}</span>
+            {locale === l.code ? <Check className="size-4" aria-hidden /> : null}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -271,36 +292,42 @@ export function StatCard({
 /* Badges                                                              */
 /* ------------------------------------------------------------------ */
 
-const STATUS_STYLES: Record<string, { label: string; className: string; dot: string }> = {
+const STATUS_STYLES: Record<string, { className: string; dot: string }> = {
   ACTIVE: {
-    label: 'Activa',
     className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
     dot: 'bg-emerald-500',
   },
   PENDING: {
-    label: 'Pendente',
     className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
     dot: 'bg-amber-500',
   },
   SUSPENDED: {
-    label: 'Suspensa',
     className: 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400',
     dot: 'bg-rose-500',
   },
   CANCELLED: {
-    label: 'Cancelada',
     className: 'border-zinc-500/25 bg-zinc-500/10 text-zinc-600 dark:text-zinc-400',
     dot: 'bg-zinc-400',
   },
   REVOKED: {
-    label: 'Revogada',
     className: 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400',
     dot: 'bg-rose-500',
   },
   INACTIVE: {
-    label: 'Inactiva',
     className: 'border-zinc-500/25 bg-zinc-500/10 text-zinc-600 dark:text-zinc-400',
     dot: 'bg-zinc-400',
+  },
+  PAID: {
+    className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+    dot: 'bg-emerald-500',
+  },
+  OPEN: {
+    className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
+    dot: 'bg-amber-500',
+  },
+  OVERDUE: {
+    className: 'border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-400',
+    dot: 'bg-rose-500',
   },
 }
 
@@ -311,8 +338,9 @@ export function StatusBadge({
   status: string
   labels?: Record<string, string>
 }) {
+  const { status: statusLabel } = useLabels()
   const cfg = STATUS_STYLES[status] ?? STATUS_STYLES.CANCELLED
-  const label = labels?.[status] ?? cfg.label
+  const label = labels?.[status] ?? statusLabel(status)
   return (
     <Badge variant="outline" className={cn('gap-1.5 px-2 py-0.5', cfg.className)}>
       <span className="relative flex size-1.5" aria-hidden>
@@ -325,6 +353,7 @@ export function StatusBadge({
 }
 
 export function RoleBadge({ role }: { role: string }) {
+  const { role: roleLabel } = useLabels()
   const cfg =
     role === 'SUPER_ADMIN'
       ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
@@ -347,38 +376,46 @@ const AUDIT_TONES = {
 
 type AuditTone = keyof typeof AUDIT_TONES
 
-const AUDIT_META: Record<string, { label: string; tone: AuditTone }> = {
-  LOGIN: { label: 'Sessão iniciada', tone: 'zinc' },
-  LOGIN_FAILED: { label: 'Login falhado', tone: 'rose' },
-  COMPANY_CREATED: { label: 'Empresa criada', tone: 'emerald' },
-  COMPANY_UPDATED: { label: 'Empresa actualizada', tone: 'amber' },
-  COMPANY_DELETED: { label: 'Empresa eliminada', tone: 'rose' },
-  COMPANY_SUSPENDED: { label: 'Empresa suspensa', tone: 'rose' },
-  COMPANY_ACTIVATED: { label: 'Empresa activada', tone: 'emerald' },
-  PLAN_CREATED: { label: 'Plano criado', tone: 'emerald' },
-  PLAN_UPDATED: { label: 'Plano actualizado', tone: 'amber' },
-  PLAN_DELETED: { label: 'Plano eliminado', tone: 'rose' },
-  MODULE_CREATED: { label: 'Módulo criado', tone: 'emerald' },
-  MODULE_UPDATED: { label: 'Módulo actualizado', tone: 'amber' },
-  MODULE_ENABLED: { label: 'Módulo activado', tone: 'emerald' },
-  MODULE_DISABLED: { label: 'Módulo desactivado', tone: 'rose' },
-  KEY_REGENERATED: { label: 'Chave regenerada', tone: 'amber' },
-  KEY_REVOKED: { label: 'Chave revogada', tone: 'rose' },
-  USER_CREATED: { label: 'Utilizador criado', tone: 'emerald' },
-  USER_UPDATED: { label: 'Utilizador actualizado', tone: 'amber' },
-  USER_DELETED: { label: 'Utilizador eliminado', tone: 'rose' },
-  SETTING_UPDATED: { label: 'Configuração alterada', tone: 'amber' },
+/** Acções de auditoria conhecidas → tom de cor. O rótulo vem do i18n. */
+const AUDIT_TONE_MAP: Record<string, AuditTone> = {
+  LOGIN: 'zinc',
+  LOGIN_FAILED: 'rose',
+  COMPANY_CREATED: 'emerald',
+  COMPANY_UPDATED: 'amber',
+  COMPANY_DELETED: 'rose',
+  COMPANY_SUSPENDED: 'rose',
+  COMPANY_ACTIVATED: 'emerald',
+  PLAN_CREATED: 'emerald',
+  PLAN_UPDATED: 'amber',
+  PLAN_DELETED: 'rose',
+  MODULE_CREATED: 'emerald',
+  MODULE_UPDATED: 'amber',
+  MODULE_DELETED: 'rose',
+  MODULE_ENABLED: 'emerald',
+  MODULE_DISABLED: 'rose',
+  KEY_REGENERATED: 'amber',
+  KEY_REVOKED: 'rose',
+  USER_CREATED: 'emerald',
+  USER_UPDATED: 'amber',
+  USER_DELETED: 'rose',
+  SETTING_UPDATED: 'amber',
+  INVOICE_CREATED: 'emerald',
+  INVOICE_UPDATED: 'amber',
+  INVOICE_DELETED: 'rose',
+  INVOICE_PAID: 'emerald',
+  WEBHOOK_CREATED: 'emerald',
+  WEBHOOK_UPDATED: 'amber',
+  WEBHOOK_DELETED: 'rose',
+  LICENSE_ACTIVATED: 'emerald',
+  LICENSE_REVOKED: 'rose',
 }
 
-export const AUDIT_ACTIONS = Object.keys(AUDIT_META)
-
-export function auditActionLabel(action: string): string {
-  return AUDIT_META[action]?.label ?? action
-}
+export const AUDIT_ACTIONS = Object.keys(AUDIT_TONE_MAP)
 
 export function AuditBadge({ action }: { action: string }) {
-  const meta = AUDIT_META[action] ?? { label: action, tone: 'zinc' as AuditTone }
-  return <Badge variant="outline" className={cn('px-2 py-0.5 whitespace-nowrap', AUDIT_TONES[meta.tone])}>{meta.label}</Badge>
+  const { auditAction } = useLabels()
+  const tone = AUDIT_TONE_MAP[action] ?? 'zinc'
+  return <Badge variant="outline" className={cn('px-2 py-0.5 whitespace-nowrap', AUDIT_TONES[tone])}>{auditAction(action)}</Badge>
 }
 
 /* ------------------------------------------------------------------ */
@@ -472,20 +509,21 @@ export function TablePagination({
   onPageChange: (page: number) => void
   unit?: string
 }) {
+  const { t } = useI18n()
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1
   const to = Math.min(total, page * pageSize)
   return (
     <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
       <p className="text-xs text-muted-foreground" aria-live="polite">
-        {from}–{to} de {total} {unit}
+        {t('pagination.range', { from, to, total, unit })}
       </p>
       <div className="flex items-center gap-2">
         <Button
           variant="outline"
           size="icon"
           className="size-10"
-          aria-label="Página anterior"
+          aria-label={t('pagination.prevAria')}
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
         >
@@ -498,7 +536,7 @@ export function TablePagination({
           variant="outline"
           size="icon"
           className="size-10"
-          aria-label="Página seguinte"
+          aria-label={t('pagination.nextAria')}
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
         >
@@ -515,6 +553,7 @@ export function TablePagination({
 
 export function CopyKeyButton({ value, label }: { value?: string | null; label?: string }) {
   const [copied, setCopied] = React.useState(false)
+  const { t } = useI18n()
   if (!value) {
     return <span className="text-xs text-muted-foreground">—</span>
   }
@@ -523,19 +562,20 @@ export function CopyKeyButton({ value, label }: { value?: string | null; label?:
     try {
       await navigator.clipboard.writeText(value)
       setCopied(true)
-      toast.success('Chave copiada para a área de transferência')
+      toast.success(t('common.copied'))
       window.setTimeout(() => setCopied(false), 1600)
     } catch {
-      toast.error('Não foi possível copiar a chave')
+      toast.error(t('common.copyFail'))
     }
   }
+  const aria = label ?? t('common.copyKey')
   return (
     <Button
       variant="ghost"
       size="icon"
       className="size-8 text-muted-foreground hover:text-foreground"
-      aria-label={label ?? 'Copiar chave'}
-      title={label ?? 'Copiar'}
+      aria-label={aria}
+      title={aria}
       onClick={() => void handleCopy()}
     >
       {copied ? <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="size-3.5" />}
@@ -558,6 +598,7 @@ export function KeysField({
 }) {
   const [confirmAction, setConfirmAction] = React.useState<'regenerate' | 'toggle' | null>(null)
   const [busy, setBusy] = React.useState(false)
+  const { t } = useI18n()
   const revoked = status === 'REVOKED'
 
   async function runConfirm() {
@@ -579,13 +620,13 @@ export function KeysField({
     <div className="rounded-lg border p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">{label}</p>
-        {status ? <StatusBadge status={status} labels={{ ACTIVE: 'Activa', REVOKED: 'Revogada' }} /> : null}
+        {status ? <StatusBadge status={status} /> : null}
       </div>
       <div className="mt-3 flex items-center gap-1.5">
         <code className="min-w-0 flex-1 truncate rounded-md bg-muted/60 px-2.5 py-1.5 font-mono text-[13px]">
           {maskKey(value)}
         </code>
-        <CopyKeyButton value={value} label={`Copiar ${label.toLowerCase()}`} />
+        <CopyKeyButton value={value} label={t('common.copyField', { field: label })} />
       </div>
       {(onRegenerate || onToggleStatus) && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -599,7 +640,7 @@ export function KeysField({
               onClick={() => setConfirmAction('regenerate')}
             >
               <RefreshCw className="size-3.5" />
-              Regenerar
+              {t('shared.keys.regenerate')}
             </Button>
           ) : null}
           {onToggleStatus ? (
@@ -612,7 +653,7 @@ export function KeysField({
               onClick={() => setConfirmAction('toggle')}
             >
               <Ban className="size-3.5" />
-              {revoked ? 'Reactivar' : 'Revogar'}
+              {revoked ? t('shared.keys.reactivate') : t('shared.keys.revoke')}
             </Button>
           ) : null}
         </div>
@@ -623,15 +664,15 @@ export function KeysField({
         onOpenChange={(o) => {
           if (!busy) setConfirmAction(o ? confirmAction : null)
         }}
-        title={confirmAction === 'toggle' ? (revoked ? 'Reactivar chave?' : 'Revogar chave?') : 'Regenerar chave?'}
+        title={confirmAction === 'toggle' ? (revoked ? t('shared.keys.reactivateTitle') : t('shared.keys.revokeTitle')) : t('shared.keys.regenerateTitle')}
         description={
           confirmAction === 'toggle'
             ? revoked
-              ? 'A chave voltará a ser aceite pelo sistema imediatamente.'
-              : 'A aplicação cliente deixará de conseguir autenticar-se com esta chave. Pode reactivá-la mais tarde.'
-            : 'Será gerada uma nova chave e a chave actual deixará de funcionar imediatamente. A acção fica registada na auditoria.'
+              ? t('shared.keys.reactivateDesc')
+              : t('shared.keys.revokeDesc')
+            : t('shared.keys.regenerateDesc')
         }
-        confirmLabel={confirmAction === 'toggle' ? (revoked ? 'Reactivar' : 'Revogar') : 'Regenerar'}
+        confirmLabel={confirmAction === 'toggle' ? (revoked ? t('shared.keys.reactivate') : t('shared.keys.revoke')) : t('shared.keys.regenerate')}
         onConfirm={runConfirm}
       />
     </div>
@@ -647,8 +688,8 @@ export function ConfirmDialog({
   onOpenChange,
   title,
   description,
-  confirmLabel = 'Confirmar',
-  cancelLabel = 'Cancelar',
+  confirmLabel,
+  cancelLabel,
   destructive = true,
   onConfirm,
 }: {
@@ -662,6 +703,7 @@ export function ConfirmDialog({
   onConfirm: () => void | Promise<void>
 }) {
   const [busy, setBusy] = React.useState(false)
+  const { t } = useI18n()
 
   async function handleConfirm() {
     setBusy(true)
@@ -686,7 +728,7 @@ export function ConfirmDialog({
           {description ? <AlertDialogDescription>{description}</AlertDialogDescription> : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogCancel disabled={busy}>{cancelLabel ?? t('common.cancel')}</AlertDialogCancel>
           <AlertDialogAction
             className={destructive ? 'bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-500/40' : undefined}
             disabled={busy}
@@ -695,7 +737,7 @@ export function ConfirmDialog({
               void handleConfirm()
             }}
           >
-            {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : confirmLabel}
+            {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : confirmLabel ?? t('common.confirm')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

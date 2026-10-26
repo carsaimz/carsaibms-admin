@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { getSettings, updateSettings } from '@/lib/bms-api'
 import type { SettingsMap } from '@/lib/bms-api'
+import { useI18n } from '@/lib/i18n'
 import { EmptyState, PageHeader } from './shared'
 
 type FieldType = 'string' | 'number' | 'boolean'
@@ -40,59 +41,59 @@ interface SettingGroup {
 const GROUPS: SettingGroup[] = [
   {
     id: 'general',
-    title: 'Geral',
-    description: 'Identidade e dados públicos da plataforma',
+    title: 'settings.groups.general.title',
+    description: 'settings.groups.general.description',
     icon: Globe,
     fields: [
-      { key: 'siteName', label: 'Nome da plataforma', type: 'string', placeholder: 'Carsai BMS' },
-      { key: 'companyName', label: 'Nome legal da empresa', type: 'string', placeholder: 'Carsai Moçambique, Lda' },
-      { key: 'siteUrl', label: 'URL público', type: 'string', placeholder: 'https://bms.carsai.co.mz' },
-      { key: 'supportEmail', label: 'Email de suporte', type: 'string', placeholder: 'suporte@carsai.co.mz' },
-      { key: 'defaultLanguage', label: 'Idioma padrão', type: 'string', hint: 'pt ou en', placeholder: 'pt' },
-      { key: 'currency', label: 'Moeda', type: 'string', hint: 'Código ISO (MZN)', placeholder: 'MZN' },
-      { key: 'timezone', label: 'Fuso horário', type: 'string', placeholder: 'Africa/Maputo' },
+      { key: 'siteName', label: 'settings.fields.siteName.label', type: 'string', placeholder: 'Carsai BMS' },
+      { key: 'companyName', label: 'settings.fields.companyName.label', type: 'string', placeholder: 'Carsai Moçambique, Lda' },
+      { key: 'siteUrl', label: 'settings.fields.siteUrl.label', type: 'string', placeholder: 'https://bms.carsai.co.mz' },
+      { key: 'supportEmail', label: 'settings.fields.supportEmail.label', type: 'string', placeholder: 'suporte@carsai.co.mz' },
+      { key: 'defaultLanguage', label: 'settings.fields.defaultLanguage.label', type: 'string', hint: 'settings.fields.defaultLanguage.hint', placeholder: 'pt' },
+      { key: 'currency', label: 'settings.fields.currency.label', type: 'string', hint: 'settings.fields.currency.hint', placeholder: 'MZN' },
+      { key: 'timezone', label: 'settings.fields.timezone.label', type: 'string', placeholder: 'Africa/Maputo' },
     ],
   },
   {
     id: 'access',
-    title: 'Acesso',
-    description: 'Regras de registo e segurança de sessões',
+    title: 'settings.groups.access.title',
+    description: 'settings.groups.access.description',
     icon: ShieldCheck,
     fields: [
       {
         key: 'allowRegistration',
-        label: 'Permitir auto-registo de empresas',
+        label: 'settings.fields.allowRegistration.label',
         type: 'boolean',
-        hint: 'Se desactivado, só a equipa Carsai pode criar contas.',
+        hint: 'settings.fields.allowRegistration.hint',
       },
       {
         key: 'requireEmailVerification',
-        label: 'Exigir verificação de email',
+        label: 'settings.fields.requireEmailVerification.label',
         type: 'boolean',
-        hint: 'O registo só fica activo após confirmação do email.',
+        hint: 'settings.fields.requireEmailVerification.hint',
       },
-      { key: 'sessionTimeoutHours', label: 'Expiração de sessão (horas)', type: 'number' },
+      { key: 'sessionTimeoutHours', label: 'settings.fields.sessionTimeoutHours.label', type: 'number' },
     ],
   },
   {
     id: 'system',
-    title: 'Sistema',
-    description: 'Parâmetros de operação da plataforma',
+    title: 'settings.groups.system.title',
+    description: 'settings.groups.system.description',
     icon: SettingsIcon,
     fields: [
       {
         key: 'maintenanceMode',
-        label: 'Modo de manutenção',
+        label: 'settings.fields.maintenanceMode.label',
         type: 'boolean',
-        hint: 'Bloqueia o acesso ao BMS para todos os clientes.',
+        hint: 'settings.fields.maintenanceMode.hint',
       },
       {
         key: 'licenseEnforcement',
-        label: 'Aplicar bloqueio de licença',
+        label: 'settings.fields.licenseEnforcement.label',
         type: 'boolean',
-        hint: 'Bloqueia empresas com licença expirada ou revogada.',
+        hint: 'settings.fields.licenseEnforcement.hint',
       },
-      { key: 'auditRetentionDays', label: 'Retenção de auditoria (dias)', type: 'number' },
+      { key: 'auditRetentionDays', label: 'settings.fields.auditRetentionDays.label', type: 'number' },
     ],
   },
 ]
@@ -103,6 +104,7 @@ export function SettingsView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [savingGroup, setSavingGroup] = useState<string | null>(null)
+  const { t } = useI18n()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -123,11 +125,11 @@ export function SettingsView() {
       }
       setDraft(nextDraft)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao carregar as configurações.')
+      setError(e instanceof Error ? e.message : t('settings.errors.load'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -162,10 +164,10 @@ export function SettingsView() {
         }
       }
       const res = await updateSettings(patch)
-      toast.success(`Configurações de "${group.title}" guardadas.`)
+      toast.success(t('settings.toasts.saved', { group: t(group.title) }))
       setLoaded(res.settings ?? { ...loaded, ...patch })
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao guardar as configurações.')
+      toast.error(e instanceof Error ? e.message : t('settings.toasts.saveError'))
     } finally {
       setSavingGroup(null)
     }
@@ -188,8 +190,8 @@ export function SettingsView() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Configurações"
-        description="Parâmetros gerais da plataforma — as alterações ficam registadas na auditoria"
+        title={t('settings.title')}
+        description={t('settings.subtitle')}
       />
 
       {loading ? (
@@ -212,12 +214,12 @@ export function SettingsView() {
         <Card>
           <CardContent>
             <EmptyState
-              title="Erro ao carregar as configurações"
-              description={error ?? 'Tente novamente em instantes.'}
+              title={t('settings.errors.loadTitle')}
+              description={error ?? t('settings.errors.retryHint')}
               action={
                 <Button variant="outline" onClick={() => void load()}>
                   <RefreshCw className="size-4" aria-hidden />
-                  Tentar novamente
+                  {t('common.retry')}
                 </Button>
               }
             />
@@ -234,9 +236,9 @@ export function SettingsView() {
                     <span className="flex size-8 items-center justify-center rounded-lg bg-emerald-600/10 text-emerald-700 dark:text-emerald-400">
                       <group.icon className="size-4" aria-hidden />
                     </span>
-                    {group.title}
+                    {t(group.title)}
                   </CardTitle>
-                  <CardDescription>{group.description}</CardDescription>
+                  <CardDescription>{t(group.description)}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {group.fields.map((field) => (
@@ -244,21 +246,21 @@ export function SettingsView() {
                       {field.type === 'boolean' ? (
                         <label className="flex items-center justify-between gap-4 rounded-lg border p-3">
                           <span className="min-w-0">
-                            <span className="block text-sm font-medium">{field.label}</span>
+                            <span className="block text-sm font-medium">{t(field.label)}</span>
                             {field.hint ? (
-                              <span className="block text-xs text-muted-foreground">{field.hint}</span>
+                              <span className="block text-xs text-muted-foreground">{t(field.hint)}</span>
                             ) : null}
                           </span>
                           <Switch
                             checked={draft[field.key] === true}
                             onCheckedChange={(v) => setDraft((p) => ({ ...p, [field.key]: v }))}
-                            aria-label={field.label}
+                            aria-label={t(field.label)}
                           />
                         </label>
                       ) : (
                         <div className="space-y-2">
                           <Label htmlFor={`setting-${field.key}`} className="text-sm">
-                            {field.label}
+                            {t(field.label)}
                           </Label>
                           <Input
                             id={`setting-${field.key}`}
@@ -284,7 +286,7 @@ export function SettingsView() {
                       ) : (
                         <Save className="size-4" aria-hidden />
                       )}
-                      Guardar
+                      {t('common.save')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -292,7 +294,7 @@ export function SettingsView() {
                       disabled={!dirty || savingGroup !== null}
                       className="h-10"
                     >
-                      Reverter
+                      {t('settings.revert')}
                     </Button>
                   </div>
                 </CardContent>
@@ -303,7 +305,7 @@ export function SettingsView() {
       )}
 
       {anyDirty ? (
-        <p className="text-xs text-muted-foreground">Existem alterações por guardar — pressione &quot;Guardar&quot; em cada grupo.</p>
+        <p className="text-xs text-muted-foreground">{t('settings.unsavedHint')}</p>
       ) : null}
     </div>
   )

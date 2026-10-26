@@ -25,6 +25,7 @@ import { Switch } from '@/components/ui/switch'
 import { deletePlan, listModules, listPlans, updatePlan } from '@/lib/bms-api'
 import type { ModuleWithCounts, PlanWithModules } from '@/lib/bms-api'
 import { formatMZN } from '@/lib/format'
+import { useI18n } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import { ConfirmDialog, EmptyState, PageHeader, StatusBadge } from './shared'
 import { PlanFormDialog } from './plan-form-dialog'
@@ -38,6 +39,7 @@ export function PlansView() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<PlanWithModules | null>(null)
   const [toDelete, setToDelete] = useState<PlanWithModules | null>(null)
+  const { t } = useI18n()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -47,11 +49,11 @@ export function PlansView() {
       setPlans(ps)
       setModules(ms)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao carregar planos.')
+      setError(e instanceof Error ? e.message : t('plans.errors.load'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -71,9 +73,13 @@ export function PlansView() {
     try {
       const updated = await updatePlan(plan.id, { isActive: active })
       setPlans((prev) => prev?.map((p) => (p.id === plan.id ? { ...p, isActive: updated.isActive } : p)) ?? prev)
-      toast.success(active ? `Plano "${plan.name}" activado.` : `Plano "${plan.name}" desactivado.`)
+      toast.success(
+        active
+          ? t('plans.toasts.activated', { name: plan.name })
+          : t('plans.toasts.deactivated', { name: plan.name })
+      )
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao actualizar o plano.')
+      toast.error(e instanceof Error ? e.message : t('plans.toasts.updateError'))
     }
   }
 
@@ -81,19 +87,19 @@ export function PlansView() {
     if (!toDelete) return
     try {
       await deletePlan(toDelete.id)
-      toast.success(`Plano "${toDelete.name}" eliminado.`)
+      toast.success(t('plans.toasts.deleted', { name: toDelete.name }))
       void load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao eliminar o plano.')
+      toast.error(e instanceof Error ? e.message : t('plans.toasts.deleteError'))
     }
   }
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Planos" description="Planos de subscrição da plataforma e módulos incluídos">
+      <PageHeader title={t('plans.title')} description={t('plans.subtitle')}>
         <Button onClick={openCreate} className="h-11">
           <Plus className="size-4" aria-hidden />
-          Novo plano
+          {t('plans.newPlan')}
         </Button>
       </PageHeader>
 
@@ -116,12 +122,12 @@ export function PlansView() {
           <CardContent>
             <EmptyState
               icon={CircleAlert}
-              title="Erro ao carregar planos"
+              title={t('plans.errors.loadTitle')}
               description={error}
               action={
                 <Button variant="outline" onClick={() => void load()}>
                   <RefreshCw className="size-4" aria-hidden />
-                  Tentar novamente
+                  {t('common.retry')}
                 </Button>
               }
             />
@@ -132,12 +138,12 @@ export function PlansView() {
           <CardContent>
             <EmptyState
               icon={Blocks}
-              title="Nenhum plano criado"
-              description="Crie o primeiro plano de subscrição para começar a atribuir empresas."
+              title={t('plans.empty.title')}
+              description={t('plans.empty.description')}
               action={
                 <Button onClick={openCreate}>
                   <Plus className="size-4" aria-hidden />
-                  Novo plano
+                  {t('plans.newPlan')}
                 </Button>
               }
             />
@@ -154,7 +160,7 @@ export function PlansView() {
                       <h3 className="truncate font-semibold">{p.name}</h3>
                       {p.isPopular ? (
                         <Badge className="bg-amber-500/15 px-1.5 py-0 text-[10px] text-amber-700 hover:bg-amber-500/15 dark:text-amber-400">
-                          Popular
+                          {t('plans.popular')}
                         </Badge>
                       ) : null}
                     </div>
@@ -163,7 +169,11 @@ export function PlansView() {
                   <Switch
                     checked={p.isActive}
                     onCheckedChange={(v) => void handleToggleActive(p, v)}
-                    aria-label={p.isActive ? `Desactivar plano ${p.name}` : `Activar plano ${p.name}`}
+                    aria-label={
+                      p.isActive
+                        ? t('plans.toggleDeactivate', { name: p.name })
+                        : t('plans.toggleActivate', { name: p.name })
+                    }
                   />
                 </div>
 
@@ -171,13 +181,13 @@ export function PlansView() {
                   <p className="text-2xl font-semibold tabular-nums tracking-tight">
                     {formatMZN(p.price)}
                     <span className="text-sm font-normal text-muted-foreground">
-                      {p.interval === 'YEARLY' ? ' /ano' : ' /mês'}
+                      {p.interval === 'YEARLY' ? t('plans.perYear') : t('plans.perMonth')}
                     </span>
                   </p>
                   <div className="mt-1">
                     <StatusBadge
                       status={p.isActive ? 'ACTIVE' : 'INACTIVE'}
-                      labels={{ ACTIVE: 'Activo', INACTIVE: 'Inactivo' }}
+                      labels={{ ACTIVE: t('plans.statusActive'), INACTIVE: t('plans.statusInactive') }}
                     />
                   </div>
                 </div>
@@ -187,29 +197,29 @@ export function PlansView() {
                 <ul className="space-y-1.5 text-sm text-muted-foreground">
                   <li className="flex items-center gap-2">
                     <Users className="size-4 shrink-0" aria-hidden />
-                    até {p.maxUsers} utilizadores
+                    {t('plans.maxUsersUpTo', { n: p.maxUsers })}
                   </li>
                   <li className="flex items-center gap-2">
                     <Blocks className="size-4 shrink-0" aria-hidden />
-                    {p.modules.length} módulos incluídos
+                    {t('plans.modulesIncluded', { n: p.modules.length })}
                   </li>
                   <li className="flex items-center gap-2">
                     <Building2 className="size-4 shrink-0" aria-hidden />
-                    {p.companiesCount} empresas
+                    {t('plans.companiesCount', { n: p.companiesCount })}
                   </li>
                 </ul>
 
                 <div className="mt-auto flex items-center gap-2 pt-2">
                   <Button variant="outline" size="sm" className="h-10 flex-1" onClick={() => openEdit(p)}>
                     <Pencil className="size-4" aria-hidden />
-                    Editar
+                    {t('common.edit')}
                   </Button>
                   <Button
                     variant="ghost"
                     size="icon"
                     className="size-10 text-rose-600 hover:bg-rose-500/10 hover:text-rose-600 dark:text-rose-400"
-                    aria-label={`Eliminar plano ${p.name}`}
-                    title="Eliminar"
+                    aria-label={t('plans.deleteAria', { name: p.name })}
+                    title={t('common.delete')}
                     onClick={() => setToDelete(p)}
                   >
                     <Trash2 className="size-4" aria-hidden />
@@ -232,9 +242,9 @@ export function PlansView() {
       <ConfirmDialog
         open={toDelete !== null}
         onOpenChange={(o) => !o && setToDelete(null)}
-        title={`Eliminar plano "${toDelete?.name ?? ''}"?`}
-        description="As empresas associadas ficarão sem plano. Esta acção não pode ser revertida."
-        confirmLabel="Eliminar"
+        title={t('plans.deleteConfirmTitle', { name: toDelete?.name ?? '' })}
+        description={t('plans.deleteConfirmDesc')}
+        confirmLabel={t('common.delete')}
         onConfirm={handleDelete}
       />
     </div>

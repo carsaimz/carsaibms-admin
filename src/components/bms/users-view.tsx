@@ -34,13 +34,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { createUser, deleteUser, listUsers, updateUser } from '@/lib/bms-api'
 import type { User } from '@/lib/bms-api'
 import { formatDate, formatRelative, initials } from '@/lib/format'
-import { ConfirmDialog, EmptyState, PageHeader, RoleBadge, TableSkeleton } from './shared'
+import { useI18n } from '@/lib/i18n'
+import { ConfirmDialog, EmptyState, PageHeader, RoleBadge, TableSkeleton, useLabels } from './shared'
 
-const ROLES = [
-  { value: 'SUPER_ADMIN', label: 'Super Admin' },
-  { value: 'ADMIN', label: 'Administrador' },
-  { value: 'SUPPORT', label: 'Suporte' },
-]
+const ROLES = ['SUPER_ADMIN', 'ADMIN', 'SUPPORT'] as const
 
 export function UsersView({ currentUser }: { currentUser: User }) {
   const isSuperAdmin = currentUser.role === 'SUPER_ADMIN'
@@ -53,6 +50,7 @@ export function UsersView({ currentUser }: { currentUser: User }) {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<User | null>(null)
   const [toDelete, setToDelete] = useState<User | null>(null)
+  const { t } = useI18n()
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -60,11 +58,11 @@ export function UsersView({ currentUser }: { currentUser: User }) {
     try {
       setUsers(await listUsers())
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao carregar utilizadores.')
+      setError(e instanceof Error ? e.message : t('users.errors.load'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void load()
@@ -76,9 +74,13 @@ export function UsersView({ currentUser }: { currentUser: User }) {
     try {
       await updateUser(u.id, { isActive: active })
       setUsers((prev) => prev?.map((x) => (x.id === u.id ? { ...x, isActive: active } : x)) ?? prev)
-      toast.success(active ? `Utilizador "${u.name}" activado.` : `Utilizador "${u.name}" desactivado.`)
+      toast.success(
+        active
+          ? t('users.toasts.activated', { name: u.name })
+          : t('users.toasts.deactivated', { name: u.name })
+      )
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao actualizar o utilizador.')
+      toast.error(e instanceof Error ? e.message : t('users.toasts.updateError'))
     } finally {
       setBusyId(null)
     }
@@ -88,16 +90,16 @@ export function UsersView({ currentUser }: { currentUser: User }) {
     if (!toDelete) return
     try {
       await deleteUser(toDelete.id)
-      toast.success(`Utilizador "${toDelete.name}" eliminado.`)
+      toast.success(t('users.toasts.deleted', { name: toDelete.name }))
       void load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao eliminar o utilizador.')
+      toast.error(e instanceof Error ? e.message : t('users.toasts.deleteError'))
     }
   }
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Utilizadores" description="Equipa com acesso ao painel administrativo">
+      <PageHeader title={t('users.title')} description={t('users.subtitle')}>
         {isSuperAdmin ? (
           <Button
             onClick={() => {
@@ -107,7 +109,7 @@ export function UsersView({ currentUser }: { currentUser: User }) {
             className="h-11"
           >
             <Plus className="size-4" aria-hidden />
-            Novo utilizador
+            {t('users.newUser')}
           </Button>
         ) : null}
       </PageHeader>
@@ -117,27 +119,27 @@ export function UsersView({ currentUser }: { currentUser: User }) {
           {error && !loading ? (
             <EmptyState
               icon={CircleAlert}
-              title="Erro ao carregar utilizadores"
+              title={t('users.errors.loadTitle')}
               description={error}
               action={
                 <Button variant="outline" onClick={() => void load()}>
                   <RefreshCw className="size-4" aria-hidden />
-                  Tentar novamente
+                  {t('common.retry')}
                 </Button>
               }
             />
           ) : !loading && users && users.length === 0 ? (
-            <EmptyState icon={UserCog} title="Nenhum utilizador" description="Crie o primeiro utilizador do painel." />
+            <EmptyState icon={UserCog} title={t('users.empty.title')} description={t('users.empty.description')} />
           ) : (
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="pl-4">Utilizador</TableHead>
-                  <TableHead>Papel</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Último login</TableHead>
-                  <TableHead>Criado em</TableHead>
-                  {isSuperAdmin ? <TableHead className="pr-4 text-right">Acções</TableHead> : null}
+                  <TableHead className="pl-4">{t('users.table.user')}</TableHead>
+                  <TableHead>{t('users.table.role')}</TableHead>
+                  <TableHead>{t('users.table.status')}</TableHead>
+                  <TableHead>{t('users.table.lastLogin')}</TableHead>
+                  <TableHead>{t('users.table.createdAt')}</TableHead>
+                  {isSuperAdmin ? <TableHead className="pr-4 text-right">{t('common.actions')}</TableHead> : null}
                 </TableRow>
               </TableHeader>
               {loading ? (
@@ -159,7 +161,7 @@ export function UsersView({ currentUser }: { currentUser: User }) {
                             <div className="min-w-0">
                               <p className="truncate font-medium">
                                 {u.name}
-                                {isSelf ? <span className="ml-2 text-xs text-muted-foreground">(você)</span> : null}
+                                {isSelf ? <span className="ml-2 text-xs text-muted-foreground">{t('users.self')}</span> : null}
                               </p>
                               <p className="truncate text-xs text-muted-foreground">{u.email}</p>
                             </div>
@@ -173,7 +175,11 @@ export function UsersView({ currentUser }: { currentUser: User }) {
                             checked={u.isActive}
                             disabled={!canEdit || busyId === u.id}
                             onCheckedChange={(v) => void handleToggleActive(u, v)}
-                            aria-label={u.isActive ? `Desactivar ${u.name}` : `Activar ${u.name}`}
+                            aria-label={
+                              u.isActive
+                                ? t('users.toggleDeactivate', { name: u.name })
+                                : t('users.toggleActivate', { name: u.name })
+                            }
                           />
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
@@ -191,8 +197,8 @@ export function UsersView({ currentUser }: { currentUser: User }) {
                                 variant="ghost"
                                 size="icon"
                                 className="size-9"
-                                aria-label={`Editar ${u.name}`}
-                                title="Editar"
+                                aria-label={t('users.editAria', { name: u.name })}
+                                title={t('common.edit')}
                                 disabled={!canEdit}
                                 onClick={() => {
                                   setEditing(u)
@@ -205,8 +211,8 @@ export function UsersView({ currentUser }: { currentUser: User }) {
                                 variant="ghost"
                                 size="icon"
                                 className="size-9 text-rose-600 hover:bg-rose-500/10 hover:text-rose-600 dark:text-rose-400"
-                                aria-label={`Eliminar ${u.name}`}
-                                title={isSelf ? 'Não pode eliminar a sua própria conta' : 'Eliminar'}
+                                aria-label={t('users.deleteAria', { name: u.name })}
+                                title={isSelf ? t('users.deleteSelfTitle') : t('common.delete')}
                                 disabled={isSelf}
                                 onClick={() => setToDelete(u)}
                               >
@@ -237,9 +243,9 @@ export function UsersView({ currentUser }: { currentUser: User }) {
       <ConfirmDialog
         open={toDelete !== null}
         onOpenChange={(o) => !o && setToDelete(null)}
-        title={`Eliminar utilizador "${toDelete?.name ?? ''}"?`}
-        description="O utilizador perderá o acesso ao painel imediatamente. Esta acção não pode ser revertida."
-        confirmLabel="Eliminar"
+        title={t('users.deleteConfirmTitle', { name: toDelete?.name ?? '' })}
+        description={t('users.deleteConfirmDesc')}
+        confirmLabel={t('common.delete')}
         onConfirm={handleDelete}
       />
     </div>
@@ -274,6 +280,8 @@ function UserFormDialog({
   const [form, setForm] = useState<UserFormState>(EMPTY_USER_FORM)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const { t } = useI18n()
+  const L = useLabels()
 
   useEffect(() => {
     if (!open) return
@@ -285,11 +293,11 @@ function UserFormDialog({
     e.preventDefault()
     setError(null)
     if (!form.name.trim() || !form.email.trim()) {
-      setError('O nome e o email são obrigatórios.')
+      setError(t('users.form.errors.nameEmailRequired'))
       return
     }
     if (!isEdit && form.password.length < 8) {
-      setError('A password deve ter pelo menos 8 caracteres.')
+      setError(t('users.form.errors.passwordShort'))
       return
     }
     setSaving(true)
@@ -311,7 +319,7 @@ function UserFormDialog({
       onSaved()
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível guardar o utilizador.')
+      setError(err instanceof Error ? err.message : t('users.form.errors.save'))
     } finally {
       setSaving(false)
     }
@@ -321,11 +329,11 @@ function UserFormDialog({
     <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
       <DialogContent className="max-h-[85vh] overflow-y-auto scrollbar-thin sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Editar utilizador' : 'Novo utilizador'}</DialogTitle>
+          <DialogTitle>{isEdit ? t('users.form.editTitle') : t('users.newUser')}</DialogTitle>
           <DialogDescription>
             {isEdit
-              ? 'Actualize os dados do utilizador. Deixe a password vazia para a manter.'
-              : 'Crie uma conta de acesso ao painel administrativo.'}
+              ? t('users.form.editDescription')
+              : t('users.form.createDescription')}
           </DialogDescription>
         </DialogHeader>
 
@@ -338,13 +346,13 @@ function UserFormDialog({
 
           <div className="space-y-2">
             <Label htmlFor="user-name">
-              Nome <span className="text-rose-600 dark:text-rose-400">*</span>
+              {t('users.form.name')} <span className="text-rose-600 dark:text-rose-400">*</span>
             </Label>
             <Input
               id="user-name"
               value={form.name}
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              placeholder="Ex: Gestor de Contas"
+              placeholder={t('users.form.namePlaceholder')}
               disabled={saving}
               required
             />
@@ -352,24 +360,24 @@ function UserFormDialog({
 
           <div className="space-y-2">
             <Label htmlFor="user-email">
-              Email <span className="text-rose-600 dark:text-rose-400">*</span>
+              {t('users.form.email')} <span className="text-rose-600 dark:text-rose-400">*</span>
             </Label>
             <Input
               id="user-email"
               type="email"
               value={form.email}
               onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-              placeholder="nome@carsai.co.mz"
+              placeholder={t('users.form.emailPlaceholder')}
               disabled={saving || isEdit}
               required
             />
-            {isEdit ? <p className="text-xs text-muted-foreground">O email não pode ser alterado.</p> : null}
+            {isEdit ? <p className="text-xs text-muted-foreground">{t('users.form.emailHint')}</p> : null}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="user-password">
-              Password{' '}
-              {isEdit ? <span className="text-xs font-normal text-muted-foreground">(vazia = manter actual)</span> : (
+              {t('users.form.password')}{' '}
+              {isEdit ? <span className="text-xs font-normal text-muted-foreground">{t('users.form.passwordKeepHint')}</span> : (
                 <span className="text-rose-600 dark:text-rose-400">*</span>
               )}
             </Label>
@@ -378,7 +386,7 @@ function UserFormDialog({
               type="password"
               value={form.password}
               onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
-              placeholder="Mínimo 8 caracteres"
+              placeholder={t('users.form.passwordPlaceholder')}
               autoComplete={isEdit ? 'new-password' : 'new-password'}
               disabled={saving}
               required={!isEdit}
@@ -386,15 +394,15 @@ function UserFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="user-role">Papel</Label>
+            <Label htmlFor="user-role">{t('users.form.role')}</Label>
             <Select value={form.role} onValueChange={(v) => setForm((p) => ({ ...p, role: v }))} disabled={saving}>
               <SelectTrigger id="user-role" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {ROLES.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>
-                    {r.label}
+                  <SelectItem key={r} value={r}>
+                    {L.role(r)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -403,11 +411,11 @@ function UserFormDialog({
 
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={saving}>
               {saving ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-              {isEdit ? 'Guardar alterações' : 'Criar utilizador'}
+              {isEdit ? t('users.form.saveChanges') : t('users.form.create')}
             </Button>
           </DialogFooter>
         </form>

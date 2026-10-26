@@ -69,12 +69,11 @@ import type {
   WebhookInfo,
 } from '@/lib/bms-api'
 import { formatDate, formatDateTime, formatMZN, formatRelative } from '@/lib/format'
+import { useI18n } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import {
   AuditBadge,
   COMPANY_STATUSES,
-  COMPANY_STATUS_LABELS,
-  categoryLabel,
   ConfirmDialog,
   CopyKeyButton,
   EmptyState,
@@ -82,6 +81,7 @@ import {
   maskKey,
   ModuleIcon,
   StatusBadge,
+  useLabels,
 } from './shared'
 import { InvoiceBadge } from './billing-view'
 import { InstanceStatusDot } from './instances-view'
@@ -90,22 +90,6 @@ import { InstanceStatusDot } from './instances-view'
 /* Helpers locais — webhooks                                           */
 /* ------------------------------------------------------------------ */
 
-const WEBHOOK_EVENT_LABELS: Record<string, string> = {
-  COMPANY_CREATED: 'Empresa criada',
-  COMPANY_ACTIVATED: 'Empresa activada',
-  COMPANY_SUSPENDED: 'Empresa suspensa',
-  LICENSE_ACTIVATED: 'Licença activada',
-  LICENSE_REVOKED: 'Licença revogada',
-  INVOICE_GENERATED: 'Factura emitida',
-  INVOICE_PAID: 'Factura paga',
-  INVOICE_OVERDUE: 'Factura em atraso',
-  TEST: 'Teste',
-}
-
-function webhookEventLabel(event: string): string {
-  return WEBHOOK_EVENT_LABELS[event] ?? event
-}
-
 function parseWebhookEvents(events: string): string[] {
   const trimmed = (events ?? '').trim()
   if (!trimmed || trimmed === '*') return []
@@ -113,10 +97,11 @@ function parseWebhookEvents(events: string): string[] {
 }
 
 function LastStatusBadge({ status }: { status: number | null }) {
+  const { t } = useI18n()
   if (status === null) {
     return (
       <Badge variant="outline" className="border-rose-500/25 bg-rose-500/10 px-2 py-0.5 text-rose-700 dark:text-rose-400">
-        Sem resposta
+        {t('companyDetail.webhooks.noResponseBadge')}
       </Badge>
     )
   }
@@ -149,6 +134,8 @@ export function CompanyDetailDialog({
   onChanged: () => void
   onEdit: (company: Company) => void
 }) {
+  const { t } = useI18n()
+  const L = useLabels()
   const [detail, setDetail] = useState<CompanyDetail | null>(null)
   const [modules, setModules] = useState<CompanyModuleState[]>([])
   const [loading, setLoading] = useState(false)
@@ -172,6 +159,13 @@ export function CompanyDetailDialog({
   // Facturas
   const [invoiceBusyId, setInvoiceBusyId] = useState<string | null>(null)
 
+  /** Labels de eventos de webhook via i18n; fallback = identificador bruto. */
+  function webhookEventLabel(event: string): string {
+    const path = `companyDetail.events.${event}`
+    const out = t(path)
+    return out === path ? event : out
+  }
+
   const load = useCallback(async () => {
     if (!companyId) return
     setLoading(true)
@@ -181,11 +175,11 @@ export function CompanyDetailDialog({
       setDetail(data)
       setModules(data.modules)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao carregar a empresa.')
+      setError(e instanceof Error ? e.message : t('companyDetail.loadError'))
     } finally {
       setLoading(false)
     }
-  }, [companyId])
+  }, [companyId, t])
 
   useEffect(() => {
     if (open) {
@@ -218,11 +212,11 @@ export function CompanyDetailDialog({
     setChangingStatus(true)
     try {
       await updateCompany(companyId, { status })
-      toast.success(`Estado alterado para "${COMPANY_STATUS_LABELS[status]}".`)
+      toast.success(t('companyDetail.statusChangedToast', { status: L.status(status) }))
       await load()
       onChanged()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao actualizar o estado.')
+      toast.error(e instanceof Error ? e.message : t('companyDetail.statusChangeError'))
     } finally {
       setChangingStatus(false)
     }
@@ -236,11 +230,11 @@ export function CompanyDetailDialog({
     try {
       const res = await toggleCompanyModule(companyId, mod.moduleId, enabled)
       setModules(res.modules)
-      toast.success(enabled ? `Módulo "${mod.name}" activado.` : `Módulo "${mod.name}" desactivado.`)
+      toast.success(enabled ? t('companyDetail.modules.enabledToast', { name: mod.name }) : t('companyDetail.modules.disabledToast', { name: mod.name }))
       onChanged()
     } catch (e) {
       setModules((prev) => prev.map((x) => (x.moduleId === mod.moduleId ? { ...x, isEnabled: !enabled } : x)))
-      toast.error(e instanceof Error ? e.message : 'Erro ao actualizar o módulo.')
+      toast.error(e instanceof Error ? e.message : t('companyDetail.modules.updateError'))
     } finally {
       setBusyModuleId(null)
     }
@@ -259,10 +253,10 @@ export function CompanyDetailDialog({
           ? { licenseKey: res.licenseKey ?? undefined }
           : { apiKey: res.apiKey ?? undefined }
       )
-      toast.success(type === 'LICENSE' ? 'Chave de licença regenerada.' : 'Chave de API regenerada.')
+      toast.success(type === 'LICENSE' ? t('companyDetail.keys.licenseRegenerated') : t('companyDetail.keys.apiRegenerated'))
       onChanged()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao regenerar a chave.')
+      toast.error(e instanceof Error ? e.message : t('companyDetail.keys.regenerateError'))
     }
   }
 
@@ -273,10 +267,10 @@ export function CompanyDetailDialog({
       patchCompanyKeys(
         type === 'LICENSE' ? { licenseStatus: status } : { apiKeyStatus: status }
       )
-      toast.success(status === 'REVOKED' ? 'Chave revogada.' : 'Chave reactivada.')
+      toast.success(status === 'REVOKED' ? t('companyDetail.keys.revoked') : t('companyDetail.keys.reactivated'))
       onChanged()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao alterar o estado da chave.')
+      toast.error(e instanceof Error ? e.message : t('companyDetail.keys.statusError'))
     }
   }
 
@@ -293,11 +287,11 @@ export function CompanyDetailDialog({
     if (!companyId || creatingWebhook) return
     const url = webhookUrl.trim()
     if (!/^https:\/\/.+/.test(url)) {
-      toast.error('Indique um URL válido começado por https://')
+      toast.error(t('companyDetail.webhooks.urlInvalid'))
       return
     }
     if (webhookEventsMode === 'CUSTOM' && !webhookEventsCustom.trim()) {
-      toast.error('Lista os eventos separados por vírgula ou escolhe "Todos os eventos".')
+      toast.error(t('companyDetail.webhooks.eventsRequired'))
       return
     }
     setCreatingWebhook(true)
@@ -308,13 +302,13 @@ export function CompanyDetailDialog({
         events: webhookEventsMode === 'ALL' ? '*' : webhookEventsCustom.trim(),
       })
       setWebhookCreateOpen(false)
-      toast.success('Webhook criado com sucesso.', {
-        description: `Segredo: ${res.webhook.secret} — copia agora, só é mostrado nesta mensagem.`,
+      toast.success(t('companyDetail.webhooks.createdToast'), {
+        description: t('companyDetail.webhooks.createdToastDesc', { secret: res.webhook.secret }),
         duration: 20000,
       })
       await load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao criar o webhook.')
+      toast.error(e instanceof Error ? e.message : t('companyDetail.webhooks.createError'))
     } finally {
       setCreatingWebhook(false)
     }
@@ -330,21 +324,21 @@ export function CompanyDetailDialog({
     if (!editingWebhook || savingWebhook) return
     const url = editWebhookUrl.trim()
     if (!/^https?:\/\/.+/.test(url)) {
-      toast.error('Indica um URL válido começado por https://')
+      toast.error(t('companyDetail.webhooks.urlInvalidEdit'))
       return
     }
     if (!editWebhookEvents.trim()) {
-      toast.error('Indica os eventos (ou "*").')
+      toast.error(t('companyDetail.webhooks.eventsRequiredEdit'))
       return
     }
     setSavingWebhook(true)
     try {
       await updateWebhook(editingWebhook.id, { url, events: editWebhookEvents.trim() })
-      toast.success('Webhook actualizado.')
+      toast.success(t('companyDetail.webhooks.updatedToast'))
       setEditingWebhook(null)
       await load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao actualizar o webhook.')
+      toast.error(e instanceof Error ? e.message : t('companyDetail.webhooks.saveError'))
     } finally {
       setSavingWebhook(false)
     }
@@ -359,12 +353,12 @@ export function CompanyDetailDialog({
     )
     try {
       await updateWebhook(wh.id, { isActive })
-      toast.success(isActive ? 'Webhook activado.' : 'Webhook desactivado.')
+      toast.success(isActive ? t('companyDetail.webhooks.enabledToast') : t('companyDetail.webhooks.disabledToast'))
     } catch (e) {
       setDetail((prev) =>
         prev ? { ...prev, webhooks: prev.webhooks.map((w) => (w.id === wh.id ? { ...w, isActive: !isActive } : w)) } : prev
       )
-      toast.error(e instanceof Error ? e.message : 'Erro ao alterar o webhook.')
+      toast.error(e instanceof Error ? e.message : t('companyDetail.webhooks.toggleError'))
     } finally {
       setBusyWebhookId(null)
     }
@@ -376,15 +370,18 @@ export function CompanyDetailDialog({
     try {
       const res = await testWebhook(wh.id)
       if (res.status !== null && res.status >= 200 && res.status < 300) {
-        toast.success(`Teste enviado — o webhook respondeu ${res.status}.`)
+        toast.success(t('companyDetail.webhooks.testSuccess', { code: res.status }))
       } else {
-        toast.warning('O webhook não respondeu com sucesso.', {
-          description: res.status === null ? 'Sem resposta do servidor de destino.' : `Código de resposta: ${res.status}`,
+        toast.warning(t('companyDetail.webhooks.testFail'), {
+          description:
+            res.status === null
+              ? t('companyDetail.webhooks.testNoResponse')
+              : t('companyDetail.webhooks.testResponseCode', { code: res.status }),
         })
       }
       await load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao testar o webhook.')
+      toast.error(e instanceof Error ? e.message : t('companyDetail.webhooks.testError'))
     } finally {
       setBusyWebhookId(null)
     }
@@ -395,11 +392,11 @@ export function CompanyDetailDialog({
     setBusyWebhookId(deletingWebhook.id)
     try {
       await deleteWebhook(deletingWebhook.id)
-      toast.success('Webhook eliminado.')
+      toast.success(t('companyDetail.webhooks.deletedToast'))
       setDeletingWebhook(null)
       await load()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao eliminar o webhook.')
+      toast.error(e instanceof Error ? e.message : t('companyDetail.webhooks.deleteError'))
     } finally {
       setBusyWebhookId(null)
     }
@@ -412,11 +409,11 @@ export function CompanyDetailDialog({
     setInvoiceBusyId(inv.id)
     try {
       await updateInvoice(inv.id, { status: 'PAID', method: 'MPESA' })
-      toast.success(`Factura ${inv.number} marcada como paga (M-Pesa).`)
+      toast.success(t('companyDetail.invoices.markPaidToast', { number: inv.number }))
       await load()
       onChanged()
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao marcar a factura como paga.')
+      toast.error(e instanceof Error ? e.message : t('companyDetail.invoices.markPaidError'))
     } finally {
       setInvoiceBusyId(null)
     }
@@ -428,8 +425,8 @@ export function CompanyDetailDialog({
         {loading ? (
           <div className="space-y-4 py-2">
             <DialogHeader className="sr-only">
-              <DialogTitle>A carregar detalhes da empresa</DialogTitle>
-              <DialogDescription>Por favor aguarde.</DialogDescription>
+              <DialogTitle>{t('companyDetail.loadingTitle')}</DialogTitle>
+              <DialogDescription>{t('companyDetail.loadingDesc')}</DialogDescription>
             </DialogHeader>
             <Skeleton className="h-7 w-56" />
             <Skeleton className="h-10 w-full" />
@@ -442,17 +439,17 @@ export function CompanyDetailDialog({
         ) : error || !company ? (
           <div>
             <DialogHeader>
-              <DialogTitle>Detalhe da empresa</DialogTitle>
-              <DialogDescription>Não foi possível carregar os dados.</DialogDescription>
+              <DialogTitle>{t('companyDetail.title')}</DialogTitle>
+              <DialogDescription>{t('companyDetail.loadFailDesc')}</DialogDescription>
             </DialogHeader>
             <EmptyState
               icon={CircleAlert}
-              title="Erro ao carregar a empresa"
-              description={error ?? 'Tente novamente em instantes.'}
+              title={t('companyDetail.loadErrorTitle')}
+              description={error ?? t('companyDetail.tryAgainLater')}
               action={
                 <Button variant="outline" onClick={() => void load()}>
                   <RefreshCw className="size-4" aria-hidden />
-                  Tentar novamente
+                  {t('common.retry')}
                 </Button>
               }
             />
@@ -469,13 +466,13 @@ export function CompanyDetailDialog({
 
             <Tabs defaultValue="dados" className="gap-4">
               <TabsList className="flex h-11 w-full items-center justify-start gap-1 overflow-x-auto scrollbar-thin">
-                <TabsTrigger value="dados" className="shrink-0 px-3">Dados</TabsTrigger>
-                <TabsTrigger value="modulos" className="shrink-0 px-3">Módulos</TabsTrigger>
-                <TabsTrigger value="chaves" className="shrink-0 px-3">Chaves</TabsTrigger>
-                <TabsTrigger value="webhooks" className="shrink-0 px-3">Webhooks</TabsTrigger>
-                <TabsTrigger value="facturas" className="shrink-0 px-3">Facturas</TabsTrigger>
-                <TabsTrigger value="instancias" className="shrink-0 px-3">Instâncias</TabsTrigger>
-                <TabsTrigger value="actividade" className="shrink-0 px-3">Actividade</TabsTrigger>
+                <TabsTrigger value="dados" className="shrink-0 px-3">{t('companyDetail.tabs.data')}</TabsTrigger>
+                <TabsTrigger value="modulos" className="shrink-0 px-3">{t('companyDetail.tabs.modules')}</TabsTrigger>
+                <TabsTrigger value="chaves" className="shrink-0 px-3">{t('companyDetail.tabs.keys')}</TabsTrigger>
+                <TabsTrigger value="webhooks" className="shrink-0 px-3">{t('companyDetail.tabs.webhooks')}</TabsTrigger>
+                <TabsTrigger value="facturas" className="shrink-0 px-3">{t('companyDetail.tabs.invoices')}</TabsTrigger>
+                <TabsTrigger value="instancias" className="shrink-0 px-3">{t('companyDetail.tabs.instances')}</TabsTrigger>
+                <TabsTrigger value="actividade" className="shrink-0 px-3">{t('companyDetail.tabs.activity')}</TabsTrigger>
               </TabsList>
 
               {/* -------- Dados -------- */}
@@ -487,13 +484,13 @@ export function CompanyDetailDialog({
                       onValueChange={(v) => void handleStatusChange(v as CompanyStatus)}
                       disabled={changingStatus}
                     >
-                      <SelectTrigger className="h-10 w-44" aria-label="Alterar estado da empresa">
+                      <SelectTrigger className="h-10 w-44" aria-label={t('companyDetail.changeStatusAria')}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {COMPANY_STATUSES.map((s) => (
                           <SelectItem key={s} value={s}>
-                            {COMPANY_STATUS_LABELS[s]}
+                            {L.status(s)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -502,35 +499,42 @@ export function CompanyDetailDialog({
                   </div>
                   <Button variant="outline" className="h-10" onClick={() => onEdit(company)}>
                     <Pencil className="size-4" aria-hidden />
-                    Editar dados
+                    {t('companyDetail.editData')}
                   </Button>
                 </div>
 
                 <dl className="grid gap-x-6 gap-y-3 rounded-lg border p-4 sm:grid-cols-2">
-                  <DataItem label="Telefone" value={company.phone ?? '—'} />
-                  <DataItem label="NUIT" value={company.nuit ?? '—'} />
-                  <DataItem label="Endereço" value={company.address ?? '—'} />
-                  <DataItem label="Cidade / Província" value={[company.city, company.province].filter(Boolean).join(', ') || '—'} />
+                  <DataItem label={t('companyDetail.fields.phone')} value={company.phone ?? '—'} />
+                  <DataItem label={t('companyDetail.fields.nuit')} value={company.nuit ?? '—'} />
+                  <DataItem label={t('companyDetail.fields.address')} value={company.address ?? '—'} />
+                  <DataItem label={t('companyDetail.fields.cityProvince')} value={[company.city, company.province].filter(Boolean).join(', ') || '—'} />
                   <DataItem
-                    label="Plano"
+                    label={t('companyDetail.fields.plan')}
                     value={
                       company.plan
-                        ? `${company.plan.name} · ${formatMZN(company.plan.price)} / ${company.plan.interval === 'YEARLY' ? 'ano' : 'mês'}`
-                        : 'Sem plano'
+                        ? t('companyDetail.fields.planValue', {
+                            name: company.plan.name,
+                            price: formatMZN(company.plan.price),
+                            interval:
+                              company.plan.interval === 'YEARLY'
+                                ? t('companyDetail.fields.perYear')
+                                : t('companyDetail.fields.perMonth'),
+                          })
+                        : t('companyDetail.fields.noPlan')
                     }
                   />
-                  <DataItem label="Máx. utilizadores" value={String(company.maxUsers)} />
+                  <DataItem label={t('companyDetail.fields.maxUsers')} value={String(company.maxUsers)} />
                   <DataItem
-                    label="Chave de licença"
-                    value={<StatusBadge status={company.licenseStatus} labels={{ ACTIVE: 'Activa', REVOKED: 'Revogada' }} />}
+                    label={t('companyDetail.fields.licenseKey')}
+                    value={<StatusBadge status={company.licenseStatus} labels={{ ACTIVE: L.status('ACTIVE'), REVOKED: L.status('REVOKED') }} />}
                   />
                   <DataItem
-                    label="Chave de API"
-                    value={<StatusBadge status={company.apiKeyStatus} labels={{ ACTIVE: 'Activa', REVOKED: 'Revogada' }} />}
+                    label={t('companyDetail.fields.apiKey')}
+                    value={<StatusBadge status={company.apiKeyStatus} labels={{ ACTIVE: L.status('ACTIVE'), REVOKED: L.status('REVOKED') }} />}
                   />
-                  <DataItem label="Criada em" value={formatDateTime(company.createdAt)} />
-                  <DataItem label="Expira em" value={company.expiresAt ? formatDate(company.expiresAt) : '—'} />
-                  <DataItem label="Notas" value={company.notes ?? '—'} wide />
+                  <DataItem label={t('companyDetail.fields.createdAt')} value={formatDateTime(company.createdAt)} />
+                  <DataItem label={t('companyDetail.fields.expiresAt')} value={company.expiresAt ? formatDate(company.expiresAt) : '—'} />
+                  <DataItem label={t('companyDetail.fields.notes')} value={company.notes ?? '—'} wide />
                 </dl>
               </TabsContent>
 
@@ -539,8 +543,8 @@ export function CompanyDetailDialog({
                 {groupedModules.length === 0 ? (
                   <EmptyState
                     icon={Blocks}
-                    title="Sem módulos"
-                    description="Esta empresa ainda não tem módulos associados. Escolha um plano para os activar."
+                    title={t('companyDetail.modules.emptyTitle')}
+                    description={t('companyDetail.modules.emptyDesc')}
                   />
                 ) : (
                   <div className="space-y-5">
@@ -549,9 +553,9 @@ export function CompanyDetailDialog({
                       return (
                         <div key={category}>
                           <p className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            <span>{categoryLabel(category)}</span>
+                            <span>{L.category(category)}</span>
                             <span className="tabular-nums">
-                              {enabledCount}/{mods.length} activos
+                              {t('companyDetail.modules.activeCount', { enabled: enabledCount, total: mods.length })}
                             </span>
                           </p>
                           <div className="divide-y rounded-lg border">
@@ -565,7 +569,7 @@ export function CompanyDetailDialog({
                                     {m.name}
                                     {m.isCore ? (
                                       <span className="ml-2 rounded border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 align-middle text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
-                                        Essencial
+                                        {t('companyDetail.modules.coreBadge')}
                                       </span>
                                     ) : null}
                                   </p>
@@ -575,7 +579,11 @@ export function CompanyDetailDialog({
                                   checked={m.isEnabled}
                                   disabled={busyModuleId === m.moduleId || (m.isCore && m.isEnabled)}
                                   onCheckedChange={(v) => void handleToggleModule(m, v)}
-                                  aria-label={`${m.isEnabled ? 'Desactivar' : 'Activar'} módulo ${m.name}`}
+                                  aria-label={
+                                    m.isEnabled
+                                      ? t('companyDetail.modules.disableAria', { name: m.name })
+                                      : t('companyDetail.modules.enableAria', { name: m.name })
+                                  }
                                 />
                               </div>
                             ))}
@@ -584,7 +592,7 @@ export function CompanyDetailDialog({
                       )
                     })}
                     <p className="text-xs text-muted-foreground">
-                      Módulos marcados como essenciais não podem ser desactivados.
+                      {t('companyDetail.modules.coreHint')}
                     </p>
                   </div>
                 )}
@@ -593,18 +601,17 @@ export function CompanyDetailDialog({
               {/* -------- Chaves -------- */}
               <TabsContent value="chaves" className="space-y-4">
                 <p className="text-xs text-muted-foreground">
-                  As chaves autenticam a instalação BMS do cliente. Regenerar invalida a chave anterior imediatamente e
-                  fica registado na auditoria.
+                  {t('companyDetail.keys.hint')}
                 </p>
                 <KeysField
-                  label="Chave de licença"
+                  label={t('companyDetail.fields.licenseKey')}
                   value={company.licenseKey}
                   status={company.licenseStatus}
                   onRegenerate={() => handleRegenerate('LICENSE')}
                   onToggleStatus={() => handleKeyStatus('LICENSE', company.licenseStatus === 'ACTIVE' ? 'REVOKED' : 'ACTIVE')}
                 />
                 <KeysField
-                  label="Chave de API"
+                  label={t('companyDetail.fields.apiKey')}
                   value={company.apiKey}
                   status={company.apiKeyStatus}
                   onRegenerate={() => handleRegenerate('API')}
@@ -616,19 +623,19 @@ export function CompanyDetailDialog({
               <TabsContent value="webhooks" className="space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">
-                    Notificações HTTP assinadas (HMAC) enviadas quando algo muda nesta empresa.
+                    {t('companyDetail.webhooks.hint')}
                   </p>
                   <Button variant="outline" size="sm" className="h-9 shrink-0" onClick={openWebhookCreate}>
                     <Plus className="size-4" aria-hidden />
-                    Adicionar webhook
+                    {t('companyDetail.webhooks.add')}
                   </Button>
                 </div>
 
                 {webhooks.length === 0 ? (
                   <EmptyState
                     icon={Webhook}
-                    title="Sem webhooks"
-                    description="Adiciona um webhook para receber eventos desta empresa no teu sistema."
+                    title={t('companyDetail.webhooks.emptyTitle')}
+                    description={t('companyDetail.webhooks.emptyDesc')}
                   />
                 ) : (
                   <div className="divide-y rounded-lg border">
@@ -647,7 +654,7 @@ export function CompanyDetailDialog({
                               <div className="mt-1 flex flex-wrap items-center gap-1">
                                 {events.length === 0 ? (
                                   <Badge variant="outline" className="border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-400">
-                                    Todos
+                                    {t('common.all')}
                                   </Badge>
                                 ) : (
                                   events.map((ev) => (
@@ -662,7 +669,11 @@ export function CompanyDetailDialog({
                               checked={wh.isActive}
                               disabled={busyWebhookId === wh.id}
                               onCheckedChange={(v) => void handleToggleWebhook(wh, v)}
-                              aria-label={`${wh.isActive ? 'Desactivar' : 'Activar'} webhook ${wh.url}`}
+                              aria-label={
+                                wh.isActive
+                                  ? t('companyDetail.webhooks.disableAria', { url: wh.url })
+                                  : t('companyDetail.webhooks.enableAria', { url: wh.url })
+                              }
                             />
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -670,7 +681,7 @@ export function CompanyDetailDialog({
                                   variant="ghost"
                                   size="icon"
                                   className="size-9 shrink-0"
-                                  aria-label={`Acções para o webhook ${wh.url}`}
+                                  aria-label={t('companyDetail.webhooks.actionsAria', { url: wh.url })}
                                   disabled={busyWebhookId === wh.id}
                                 >
                                   {busyWebhookId === wh.id ? (
@@ -683,11 +694,11 @@ export function CompanyDetailDialog({
                               <DropdownMenuContent align="end" className="w-44">
                                 <DropdownMenuItem className="cursor-pointer" onClick={() => void handleTestWebhook(wh)}>
                                   <CircleCheck className="size-4" aria-hidden />
-                                  Testar
+                                  {t('companyDetail.webhooks.test')}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem className="cursor-pointer" onClick={() => openWebhookEdit(wh)}>
                                   <Pencil className="size-4" aria-hidden />
-                                  Editar
+                                  {t('common.edit')}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -695,7 +706,7 @@ export function CompanyDetailDialog({
                                   className="cursor-pointer"
                                   onClick={() => setDeletingWebhook(wh)}
                                 >
-                                  Eliminar
+                                  {t('common.delete')}
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -703,13 +714,13 @@ export function CompanyDetailDialog({
                           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-12 text-xs text-muted-foreground">
                             <span className="inline-flex items-center gap-1.5">
                               <LastStatusBadge status={wh.lastStatus} />
-                              {wh.lastFiredAt ? formatRelative(wh.lastFiredAt) : 'nunca enviado'}
+                              {wh.lastFiredAt ? formatRelative(wh.lastFiredAt) : t('companyDetail.webhooks.neverFired')}
                             </span>
                             <span className="inline-flex min-w-0 items-center gap-1">
                               <code className="rounded bg-muted/60 px-1.5 py-0.5 font-mono text-[11px]">
                                 {maskKey(wh.secret)}
                               </code>
-                              <CopyKeyButton value={wh.secret} label="Copiar segredo do webhook" />
+                              <CopyKeyButton value={wh.secret} label={t('companyDetail.webhooks.copySecret')} />
                             </span>
                           </div>
                         </div>
@@ -724,20 +735,20 @@ export function CompanyDetailDialog({
                 {invoices.length === 0 ? (
                   <EmptyState
                     icon={CircleAlert}
-                    title="Sem facturas"
-                    description="As facturas de subscrição desta empresa aparecerão aqui."
+                    title={t('companyDetail.invoices.emptyTitle')}
+                    description={t('companyDetail.invoices.emptyDesc')}
                   />
                 ) : (
                   <div className="max-h-80 overflow-y-auto rounded-lg border scrollbar-thin">
                     <Table>
                       <TableHeader>
                         <TableRow className="hover:bg-transparent">
-                          <TableHead className="pl-3">Nº</TableHead>
-                          <TableHead>Plano</TableHead>
-                          <TableHead className="text-right">Valor</TableHead>
-                          <TableHead>Vencimento</TableHead>
-                          <TableHead>Estado</TableHead>
-                          <TableHead className="pr-3 text-right">Acção</TableHead>
+                          <TableHead className="pl-3">{t('companyDetail.invoices.colNumber')}</TableHead>
+                          <TableHead>{t('companyDetail.invoices.colPlan')}</TableHead>
+                          <TableHead className="text-right">{t('companyDetail.invoices.colAmount')}</TableHead>
+                          <TableHead>{t('companyDetail.invoices.colDue')}</TableHead>
+                          <TableHead>{t('companyDetail.invoices.colStatus')}</TableHead>
+                          <TableHead className="pr-3 text-right">{t('companyDetail.invoices.colAction')}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -766,7 +777,7 @@ export function CompanyDetailDialog({
                                   ) : (
                                     <CircleCheck className="size-3.5" aria-hidden />
                                   )}
-                                  Marcar paga
+                                  {t('companyDetail.invoices.markPaid')}
                                 </Button>
                               ) : (
                                 <span className="text-xs text-muted-foreground">—</span>
@@ -785,8 +796,8 @@ export function CompanyDetailDialog({
                 {instances.length === 0 ? (
                   <EmptyState
                     icon={Radar}
-                    title="Sem instâncias"
-                    description="As instalações BMS desta empresa aparecem aqui após activarem a licença."
+                    title={t('companyDetail.instances.emptyTitle')}
+                    description={t('companyDetail.instances.emptyDesc')}
                   />
                 ) : (
                   <div className="divide-y rounded-lg border">
@@ -796,7 +807,7 @@ export function CompanyDetailDialog({
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-mono text-xs">{inst.instanceId}</p>
                           <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-                            <span>Versão {inst.appVersion ?? '—'}</span>
+                            <span>{t('companyDetail.instances.version', { version: inst.appVersion ?? '—' })}</span>
                             {inst.dbEngine ? (
                               <Badge variant="outline" className="px-1.5 py-0.5 font-mono text-[10px] uppercase">
                                 {inst.dbEngine}
@@ -805,7 +816,7 @@ export function CompanyDetailDialog({
                           </p>
                         </div>
                         <span className="shrink-0 text-xs text-muted-foreground">
-                          última conexão {formatRelative(inst.lastSeenAt)}
+                          {t('companyDetail.instances.lastConnection', { time: formatRelative(inst.lastSeenAt) })}
                         </span>
                       </div>
                     ))}
@@ -818,8 +829,8 @@ export function CompanyDetailDialog({
                 {auditEntries.length === 0 ? (
                   <EmptyState
                     icon={History}
-                    title="Sem actividade"
-                    description="As acções relacionadas com esta empresa aparecerão aqui."
+                    title={t('companyDetail.activity.emptyTitle')}
+                    description={t('companyDetail.activity.emptyDesc')}
                   />
                 ) : (
                   <div className="max-h-96 space-y-1 overflow-y-auto pr-1 scrollbar-thin">
@@ -850,15 +861,15 @@ export function CompanyDetailDialog({
       <Dialog open={webhookCreateOpen} onOpenChange={setWebhookCreateOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Adicionar webhook</DialogTitle>
+            <DialogTitle>{t('companyDetail.webhooks.dialog.createTitle')}</DialogTitle>
             <DialogDescription>
-              Eventos desta empresa serão enviados por POST para o URL indicado, assinados com HMAC-SHA256.
+              {t('companyDetail.webhooks.dialog.createDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="webhook-url" className="text-xs text-muted-foreground">
-                URL de destino
+                {t('companyDetail.webhooks.dialog.urlLabel')}
               </Label>
               <Input
                 id="webhook-url"
@@ -871,22 +882,22 @@ export function CompanyDetailDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="webhook-events" className="text-xs text-muted-foreground">
-                Eventos
+                {t('companyDetail.webhooks.dialog.eventsLabel')}
               </Label>
               <Select value={webhookEventsMode} onValueChange={(v) => setWebhookEventsMode(v as 'ALL' | 'CUSTOM')}>
                 <SelectTrigger id="webhook-events" className="h-11 w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Todos os eventos (*)</SelectItem>
-                  <SelectItem value="CUSTOM">Personalizado…</SelectItem>
+                  <SelectItem value="ALL">{t('companyDetail.webhooks.dialog.allEvents')}</SelectItem>
+                  <SelectItem value="CUSTOM">{t('companyDetail.webhooks.dialog.customOption')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             {webhookEventsMode === 'CUSTOM' ? (
               <div className="space-y-1.5">
                 <Label htmlFor="webhook-events-custom" className="text-xs text-muted-foreground">
-                  Eventos (separados por vírgula)
+                  {t('companyDetail.webhooks.dialog.customEventsLabel')}
                 </Label>
                 <Input
                   id="webhook-events-custom"
@@ -896,18 +907,18 @@ export function CompanyDetailDialog({
                   className="h-11 font-mono text-xs"
                 />
                 <p className="text-[11px] leading-relaxed text-muted-foreground">
-                  Disponíveis: {WEBHOOK_EVENT_LIST.join(', ')}
+                  {t('companyDetail.webhooks.dialog.available', { events: WEBHOOK_EVENT_LIST.join(', ') })}
                 </p>
               </div>
             ) : null}
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={creatingWebhook} onClick={() => setWebhookCreateOpen(false)}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button onClick={() => void handleCreateWebhook()} disabled={creatingWebhook}>
               {creatingWebhook ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Plus className="size-4" aria-hidden />}
-              Criar webhook
+              {t('companyDetail.webhooks.dialog.createButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -917,7 +928,7 @@ export function CompanyDetailDialog({
       <Dialog open={editingWebhook !== null} onOpenChange={(o) => { if (!o && !savingWebhook) setEditingWebhook(null) }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Editar webhook</DialogTitle>
+            <DialogTitle>{t('companyDetail.webhooks.dialog.editTitle')}</DialogTitle>
             <DialogDescription className="truncate">
               {editingWebhook?.url}
             </DialogDescription>
@@ -925,7 +936,7 @@ export function CompanyDetailDialog({
           <div className="grid gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="edit-webhook-url" className="text-xs text-muted-foreground">
-                URL de destino
+                {t('companyDetail.webhooks.dialog.urlLabel')}
               </Label>
               <Input
                 id="edit-webhook-url"
@@ -937,7 +948,7 @@ export function CompanyDetailDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-webhook-events" className="text-xs text-muted-foreground">
-                Eventos (separados por vírgula ou &quot;*&quot; para todos)
+                {t('companyDetail.webhooks.dialog.eventsEditLabel')}
               </Label>
               <Input
                 id="edit-webhook-events"
@@ -949,11 +960,11 @@ export function CompanyDetailDialog({
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={savingWebhook} onClick={() => setEditingWebhook(null)}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
             <Button onClick={() => void handleSaveWebhook()} disabled={savingWebhook}>
               {savingWebhook ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Pencil className="size-4" aria-hidden />}
-              Guardar alterações
+              {t('companyDetail.webhooks.dialog.saveChanges')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -963,9 +974,9 @@ export function CompanyDetailDialog({
       <ConfirmDialog
         open={deletingWebhook !== null}
         onOpenChange={(o) => { if (!o && busyWebhookId === null) setDeletingWebhook(null) }}
-        title="Eliminar webhook?"
-        description={`As notificações deixarão de ser enviadas para ${deletingWebhook?.url ?? ''}. Esta acção não pode ser revertida.`}
-        confirmLabel="Eliminar"
+        title={t('companyDetail.webhooks.deleteTitle')}
+        description={t('companyDetail.webhooks.deleteDesc', { url: deletingWebhook?.url ?? '' })}
+        confirmLabel={t('common.delete')}
         onConfirm={handleDeleteWebhook}
       />
     </Dialog>

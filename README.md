@@ -20,7 +20,10 @@ O **Carsai BMS Admin** é a camada de controlo da plataforma Carsai BMS: é aqui
 
 ## ✨ Funcionalidades
 
-- **Dashboard em tempo real** — KPIs (empresas activas, MRR estimado em MTn, módulos activos, utilizadores), gráficos de distribuição por plano, estados e crescimento de 6 meses, actividade recente
+- **Dashboard em tempo real** — 8 KPIs (empresas activas, MRR, módulos, utilizadores, instâncias activas, facturas em aberto/atraso, cobrado no mês) + gráficos de distribuição por plano, estados, crescimento e facturação de 6 meses
+- **Facturação de subscrições** — geração mensal automática, facturas manuais, marcação de pagamento (M-Pesa · e-Mola · Transferência · Numerário · Cartão), KPIs de cobrança e emitido vs. cobrado
+- **Telemetria de instâncias** — heartbeat das instalações Carsai BMS (activas · dormentes · offline), por empresa e globais, com auto-refresco
+- **Webhooks assinados** — subscrição por eventos (empresa, licença, factura), segredo copiável, teste de entrega e histórico de estado
 - **Gestão de Empresas** — CRUD com pesquisa e filtros, estados (Pendente · Activa · Suspensa · Cancelada), mudança de plano com **provisionamento automático de módulos**
 - **Módulos por empresa** — activar/desactivar qualquer módulo individualmente (módulos essenciais protegidos)
 - **Chaves de licença e API** — geração (`CARSAI-LIC-XXXX-XXXX-XXXX` · `sk_live_…`), regeneração, revogação e reactivação, máscara e cópia rápida
@@ -29,7 +32,8 @@ O **Carsai BMS Admin** é a camada de controlo da plataforma Carsai BMS: é aqui
 - **Utilizadores do painel** — papéis Super Admin · Admin · Suporte, com protecção de auto-edição
 - **Auditoria completa** — todas as acções sensíveis registadas automaticamente, com filtros por acção/entidade/pesquisa
 - **Configurações** — geral, acesso e sistema (alterações auditadas)
-- Tema claro/escuro · Interface 100% em Português · Responsivo mobile-first
+- **Internacionalização (i18n)** — 🇲🇿 Português (Moçambique) e 🇬🇧 English em toda a interface (incl. datas, números e tempo relativo via `Intl`), com seletor no topo e persistência em `localStorage`
+- Tema claro/escuro · Responsivo mobile-first · Acessibilidade ARIA
 
 ## 🧱 Stack
 
@@ -83,13 +87,19 @@ src/
 │   │   ├── users/            # utilizadores do painel
 │   │   ├── audit/            # consulta de auditoria
 │   │   ├── settings/         # configurações
-│   │   └── dashboard/        # métricas agregadas
+│   │   ├── invoices/         # facturação de subscrições (+ generate)
+│   ├── webhooks/         # webhooks por empresa
+│   ├── instances/        # telemetria de instâncias
+│   ├── telemetry/        # heartbeat do produto BMS
+│   ├── activate/         # activação pública de licenças (instalador)
+│   └── dashboard/        # métricas agregadas
 │   ├── layout.tsx
 │   └── page.tsx              # SPA (AuthGate → Login | AdminShell)
 ├── components/
 │   ├── bms/                  # views e componentes do painel
 │   └── ui/                   # shadcn/ui
 └── lib/
+    ├── i18n/                 # provider + dicionários pt-MZ/en (núcleo + vistas)
     ├── auth.ts               # tokens HMAC-SHA256 + sessão
     ├── audit.ts              # registo de auditoria
     ├── keys.ts               # geração de chaves/slug
@@ -111,10 +121,22 @@ prisma/
 | Planos | `GET/POST /api/plans` · `PATCH/DELETE /api/plans/[id]` |
 | Módulos | `GET/POST /api/modules` · `PATCH/DELETE /api/modules/[id]` |
 | Utilizadores | `GET/POST /api/users` · `PATCH/DELETE /api/users/[id]` |
+| Facturação | `GET/POST /api/invoices` · `POST /api/invoices/generate` · `PATCH/DELETE /api/invoices/[id]` |
+| Webhooks | `GET/POST /api/webhooks` · `PATCH/DELETE /api/webhooks/[id]` · `POST …/test` |
+| Instâncias | `GET /api/instances` · `POST /api/telemetry` (heartbeat) · `POST /api/activate` |
 | Auditoria | `GET /api/audit` |
 | Configurações | `GET/PATCH /api/settings` |
 
 Autenticação via cookie `httpOnly` (`bms_token`) assinado com HMAC-SHA256; passwords com bcrypt; operações sensíveis restritas ao papel **Super Admin**; toda a actividade registada na auditoria.
+
+## 🌍 Internacionalização
+
+A plataforma é **bilingue desde a v1.2**:
+
+- **`pt`** — Português de Moçambique (pré-Acordo) — idioma por defeito
+- **`en`** — English — tradução de apoio
+
+O seletor (🌐) fica na topbar/login; a escolha persiste em `localStorage` (`carsai-locale`). Datas, números e tempo relativo usam `Intl` no locale activo (`pt-PT` / `en-GB`, fuso `Africa/Maputo`). Os dicionários vivem em `src/lib/i18n/` (`locales.ts` núcleo + `views-*.ts` por área) com fallback `pt → en → chave` e interpolação `{variável}`.
 
 ## 🔒 Segurança
 
@@ -127,7 +149,9 @@ Autenticação via cookie `httpOnly` (`bms_token`) assinado com HMAC-SHA256; pas
 ## 🗺️ Roadmap
 
 - [x] v1.0 — Empresas, planos, módulos, chaves, utilizadores, auditoria, configurações
-- [ ] Facturação/recibos de subscrições (M-Pesa, e-Mola, mKesh)
+- [x] v1.1 — Facturação de subscrições, telemetria de instâncias, webhooks assinados
+- [x] v1.2 — Internacionalização completa (pt-MZ · en) com `Intl` para datas/números
+- [ ] mKesh e mais métodos de pagamento
 - [ ] Convites e onboarding de empresas
 - [ ] 2FA para utilizadores do painel
 - [ ] Exportações (PDF/Excel) e notificações por email

@@ -3,6 +3,7 @@
 /**
  * AdminShell — estrutura principal do painel (sidebar + topbar + conteúdo).
  * Navegação por estado (SPA), sidebar escura fixa em md+ e Sheet em mobile.
+ * Todos os textos via i18n (pt-MZ / en).
  */
 
 import { useState } from 'react'
@@ -35,6 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import type { User } from '@/lib/bms-api'
+import { useI18n } from '@/lib/i18n'
 import { initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { DashboardView } from './dashboard-view'
@@ -46,54 +48,48 @@ import { UsersView } from './users-view'
 import { AuditView } from './audit-view'
 import { InstancesView } from './instances-view'
 import { SettingsView } from './settings-view'
-import { Logo, ThemeToggle, roleLabel, type SectionId } from './shared'
+import { Logo, ThemeToggle, LanguageToggle, useLabels, type SectionId } from './shared'
 
 const NAV_GROUPS: Array<{
-  label: string
-  items: Array<{ id: SectionId; label: string; icon: LucideIcon }>
+  key: 'overview' | 'management' | 'system'
+  items: Array<{ id: SectionId; icon: LucideIcon }>
 }> = [
   {
-    label: 'Visão geral',
-    items: [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }],
+    key: 'overview',
+    items: [{ id: 'dashboard', icon: LayoutDashboard }],
   },
   {
-    label: 'Gestão',
+    key: 'management',
     items: [
-      { id: 'companies', label: 'Empresas', icon: Building2 },
-      { id: 'plans', label: 'Planos', icon: CreditCard },
-      { id: 'modules', label: 'Módulos', icon: Blocks },
-      { id: 'billing', label: 'Facturação', icon: ReceiptText },
+      { id: 'companies', icon: Building2 },
+      { id: 'plans', icon: CreditCard },
+      { id: 'modules', icon: Blocks },
+      { id: 'billing', icon: ReceiptText },
     ],
   },
   {
-    label: 'Sistema',
+    key: 'system',
     items: [
-      { id: 'users', label: 'Utilizadores', icon: UserCog },
-      { id: 'audit', label: 'Auditoria', icon: ScrollText },
-      { id: 'instances', label: 'Instâncias', icon: Radar },
-      { id: 'settings', label: 'Configurações', icon: Settings },
+      { id: 'users', icon: UserCog },
+      { id: 'audit', icon: ScrollText },
+      { id: 'instances', icon: Radar },
+      { id: 'settings', icon: Settings },
     ],
   },
 ]
 
-const SECTION_META: Record<SectionId, { title: string; subtitle: string }> = {
-  dashboard: { title: 'Dashboard', subtitle: 'Visão geral da plataforma em tempo real' },
-  companies: { title: 'Empresas', subtitle: 'Gestão de empresas clientes e chaves de licença' },
-  plans: { title: 'Planos', subtitle: 'Planos de subscrição e módulos incluídos' },
-  modules: { title: 'Módulos', subtitle: 'Módulos do sistema BMS' },
-  billing: { title: 'Facturação', subtitle: 'Facturas de subscrição das empresas cliente' },
-  users: { title: 'Utilizadores', subtitle: 'Equipa com acesso ao painel administrativo' },
-  audit: { title: 'Auditoria', subtitle: 'Registo de acções efectuadas no sistema' },
-  instances: { title: 'Instâncias', subtitle: 'Telemetria das instalações Carsai BMS em tempo real' },
-  settings: { title: 'Configurações', subtitle: 'Parâmetros gerais da plataforma' },
+function sectionLabel(t: (p: string) => string, id: SectionId, part: 'title' | 'subtitle'): string {
+  return t(`shell.sections.${id}.${part}`)
 }
 
 function NavButton({
   item,
+  label,
   active,
   onClick,
 }: {
-  item: { id: SectionId; label: string; icon: LucideIcon }
+  item: { id: SectionId; icon: LucideIcon }
+  label: string
   active: boolean
   onClick: () => void
 }) {
@@ -114,7 +110,7 @@ function NavButton({
         <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-emerald-500" aria-hidden />
       ) : null}
       <Icon className="size-[18px] shrink-0" aria-hidden />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate">{label}</span>
     </button>
   )
 }
@@ -126,16 +122,23 @@ function NavGroups({
   section: SectionId
   onSelect: (id: SectionId) => void
 }) {
+  const { t } = useI18n()
   return (
     <div className="space-y-6">
       {NAV_GROUPS.map((group) => (
-        <div key={group.label}>
+        <div key={group.key}>
           <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-600">
-            {group.label}
+            {t(`shell.groups.${group.key}`)}
           </p>
           <div className="space-y-1">
             {group.items.map((item) => (
-              <NavButton key={item.id} item={item} active={section === item.id} onClick={() => onSelect(item.id)} />
+              <NavButton
+                key={item.id}
+                item={item}
+                label={sectionLabel(t, item.id, 'title')}
+                active={section === item.id}
+                onClick={() => onSelect(item.id)}
+              />
             ))}
           </div>
         </div>
@@ -145,6 +148,8 @@ function NavGroups({
 }
 
 function SidebarUser({ user, onLogout }: { user: User; onLogout: () => void }) {
+  const { t } = useI18n()
+  const { role } = useLabels()
   return (
     <div className="border-t border-zinc-800 p-4">
       <div className="flex items-center gap-3">
@@ -155,14 +160,14 @@ function SidebarUser({ user, onLogout }: { user: User; onLogout: () => void }) {
         </Avatar>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-zinc-100">{user.name}</p>
-          <p className="truncate text-xs text-zinc-500">{roleLabel(user.role)}</p>
+          <p className="truncate text-xs text-zinc-500">{role(user.role)}</p>
         </div>
         <Button
           variant="ghost"
           size="icon"
           className="size-11 shrink-0 text-zinc-400 hover:bg-zinc-800 hover:text-rose-400"
-          aria-label="Terminar sessão"
-          title="Terminar sessão"
+          aria-label={t('shell.logout')}
+          title={t('shell.logout')}
           onClick={onLogout}
         >
           <LogOut className="size-4" aria-hidden />
@@ -175,7 +180,8 @@ function SidebarUser({ user, onLogout }: { user: User; onLogout: () => void }) {
 export function AdminShell({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [section, setSection] = useState<SectionId>('dashboard')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const meta = SECTION_META[section]
+  const { t } = useI18n()
+  const { role } = useLabels()
 
   function selectSection(id: SectionId) {
     setSection(id)
@@ -189,7 +195,7 @@ export function AdminShell({ user, onLogout }: { user: User; onLogout: () => voi
         <div className="flex h-16 shrink-0 items-center border-b border-zinc-800 px-5">
           <Logo size="sm" dark />
         </div>
-        <nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-thin" aria-label="Navegação principal">
+        <nav className="flex-1 overflow-y-auto px-3 py-5 scrollbar-thin" aria-label={t('shell.navAria')}>
           <NavGroups section={section} onSelect={selectSection} />
         </nav>
         <SidebarUser user={user} onLogout={onLogout} />
@@ -203,24 +209,27 @@ export function AdminShell({ user, onLogout }: { user: User; onLogout: () => voi
               variant="ghost"
               size="icon"
               className="size-11 md:hidden"
-              aria-label="Abrir menu de navegação"
+              aria-label={t('shell.openNav')}
               onClick={() => setMobileNavOpen(true)}
             >
               <Menu className="size-5" aria-hidden />
             </Button>
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-base font-semibold leading-tight tracking-tight sm:text-lg">
-                {meta.title}
+                {sectionLabel(t, section, 'title')}
               </h1>
-              <p className="hidden truncate text-xs text-muted-foreground sm:block">{meta.subtitle}</p>
+              <p className="hidden truncate text-xs text-muted-foreground sm:block">
+                {sectionLabel(t, section, 'subtitle')}
+              </p>
             </div>
+            <LanguageToggle />
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   className="size-11 gap-2 px-1.5 sm:w-auto sm:px-2"
-                  aria-label="Menu do utilizador"
+                  aria-label={t('shell.userMenu')}
                 >
                   <Avatar className="size-8">
                     <AvatarFallback className="bg-emerald-600 text-xs font-semibold text-white">
@@ -229,7 +238,7 @@ export function AdminShell({ user, onLogout }: { user: User; onLogout: () => voi
                   </Avatar>
                   <span className="hidden min-w-0 flex-col items-start leading-tight md:flex">
                     <span className="max-w-36 truncate text-sm font-medium">{user.name}</span>
-                    <span className="text-[11px] text-muted-foreground">{roleLabel(user.role)}</span>
+                    <span className="text-[11px] text-muted-foreground">{role(user.role)}</span>
                   </span>
                   <ChevronsUpDown className="hidden size-4 text-muted-foreground md:block" aria-hidden />
                 </Button>
@@ -246,7 +255,7 @@ export function AdminShell({ user, onLogout }: { user: User; onLogout: () => voi
                   className="cursor-pointer"
                 >
                   <LogOut className="size-4" aria-hidden />
-                  Terminar sessão
+                  {t('shell.logout')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -274,8 +283,8 @@ export function AdminShell({ user, onLogout }: { user: User; onLogout: () => voi
 
         <footer className="mt-auto border-t">
           <div className="mx-auto flex w-full max-w-[1400px] flex-col items-center justify-between gap-1.5 px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:px-6">
-            <p>Carsai BMS Admin v1.0 · © 2025 CarsaiDev — Uma linha, uma solução. 🇲🇿</p>
-            <p>Desenvolvido com Next.js + Prisma</p>
+            <p>{t('brand.footer')}</p>
+            <p>{t('brand.developedWith')}</p>
           </div>
         </footer>
       </div>
@@ -287,10 +296,10 @@ export function AdminShell({ user, onLogout }: { user: User; onLogout: () => voi
           className="w-72 border-r border-zinc-800 bg-zinc-950 p-0 text-zinc-300 [&>button]:text-zinc-400"
         >
           <SheetHeader className="border-b border-zinc-800 px-5 py-4">
-            <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
+            <SheetTitle className="sr-only">{t('shell.mobileNavTitle')}</SheetTitle>
             <Logo size="sm" dark />
           </SheetHeader>
-          <nav className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin" aria-label="Navegação principal">
+          <nav className="flex-1 overflow-y-auto px-3 py-4 scrollbar-thin" aria-label={t('shell.navAria')}>
             <NavGroups section={section} onSelect={selectSection} />
           </nav>
           <SidebarUser user={user} onLogout={onLogout} />
